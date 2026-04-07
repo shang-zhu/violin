@@ -1,0 +1,51 @@
+# video-translate configuration
+# Override with a custom YAML via: --config my_config.yaml
+
+# ── Models ──────────────────────────────────────────────────
+models:
+  transcription: "openai/whisper-large-v3"
+  translation: "Qwen/Qwen3-235B-A22B-Instruct-2507-tput"
+  tts: "cartesia/sonic-3"
+
+# ── Pricing (Together AI serverless, https://together.ai/pricing) ──
+pricing:
+  whisper_per_minute: 0.0015
+  llm_per_m_input_tokens: 0.30
+  llm_per_m_output_tokens: 1.20
+  tts_per_m_characters: 65.00
+
+# ── Translation ─────────────────────────────────────────────
+translation:
+  batch_size: 64
+  max_retries: 3
+  temperature: 0.3
+  debug_dir: "translate_debug"
+
+# ── TTS ─────────────────────────────────────────────────────
+tts:
+  workers: 16
+
+# ── Pipeline defaults ───────────────────────────────────────────
+pipeline:
+  diarize: false
+  voice_gender: "male"   # "male" or "female" — picks the default native voice
+
+# ── Segment merging (combine Whisper fragments into sentences) ──
+merge:
+  max_gap: 1.0        # seconds — merge if gap between segments is smaller
+  max_duration: 60.0   # seconds — never merge beyond this total length
+
+# ── Video merge / alignment ─────────────────────────────────
+merge_video:
+  workers: 8
+  output_fps: 30
+  min_gap: 0.05        # seconds — skip gap chunks shorter than this
+  speed_clamp_min: 0.5
+  speed_clamp_max: 2.5
+  crf: 23
+  preset: "ultrafast"
+
+# ── API server ──────────────────────────────────────────────
+api:
+  jobs_dir: "jobs"
+  max_workers: 8

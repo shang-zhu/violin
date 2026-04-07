@@ -1,0 +1,103 @@
+"""Synthesize speech using Cartesia Sonic 3 via Together AI (serverless)."""
+
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
+
+from together import Together
+
+from . import config as _conf
+from .costs import CostTracker
+from .transcriber import Segment
+
+# Native-sounding voices per language — matched to Cartesia's language-specific voice catalog.
+# Ordered: [primary male, primary female] so diarization can pick appropriately.
+_NATIVE_VOICES: dict[str, list[str]] = {
+    "zh": ["chinese commercial man", "chinese female conversational"],
+    "ja": ["japanese male conversational", "japanese woman conversational"],
+    "ko": ["korean narrator man", "korean calm woman"],
+    "es": ["spanish narrator man", "spanish narrator lady"],
+    "fr": ["french narrator man", "french narrator lady"],
+    "de": ["german reporter man", "german conversational woman"],
+    "it": ["italian narrator man", "italian narrator woman"],
+    "nl": ["dutch confident man", "dutch man"],
+    "ru": ["russian narrator man 1", "russian narrator woman"],
+    "pt": ["friendly brazilian man", "pleasant brazilian lady"],
+    "hi": ["hindi narrator man", "hindi narrator woman"],
+    "tr": ["turkish narrator man", "turkish calm man"],
+    "pl": ["polish confident man", "polish narrator woman"],
+    "sv": ["swedish narrator man", "swedish calm lady"],
+    "ar": ["middle eastern woman", "middle eastern woman"],  # one option available
+}
+
+# English fallback voices for unmatched languages
+_EN_VOICES = ["tutorial man", "helpful woman", "nonfiction man", "reading man"]
+
+
+def native_voices_for(language_code: str) -> list[str]:
+    """Return [male_voice, female_voice] for the given BCP-47 language code."""
+    return _NATIVE_VOICES.get(language_code, _EN_VOICES)
+
+
+def all_voices() -> dict[str, list[str]]:
+    """Return all known native voices grouped by BCP-47 language code."""
+    result = dict(_NATIVE_VOICES)
+    result["en"] = list(_EN_VOICES)
+    return result
+
+
+def synthesize_segment(
+    text: str,
+    voice: str,
+    output_path: str,
+    client: Together,
+    language: str = "en",
+) -> str:
+    """Synthesize a single text segment to a WAV file."""
+    response = client.audio.speech.create(
+        model=_conf.get()["models"]["tts"],
+        input=text,
+        voice=voice,
+        response_format="wav",
+        language=language,
+    )
+    response.write_to_file(output_path)
+    return output_path
+
+
+def synthesize_segments(
+    segments: list[Segment],
+    voice: str,
+    output_dir: str,
+    client: Together,
+    language: str = "en",
+    voice_map: dict[str, str] | None = None,
+    tracker: CostTracker | None = None,
+) -> list[str]:
+    """Synthesize all segments concurrently.
+
+    If voice_map is provided (speaker → voice), each segment uses the voice
+    assigned to its speaker. Falls back to `voice` for unlabeled segments.
+    """
+    total = len(segments)
+    paths = [""] * total
+    vm = voice_map or {}
+
+    def _do(idx: int, seg: Segment) -> tuple[int, str]:
+        path = str(Path(output_dir) / f"seg_{seg.id:05d}.wav")
+        seg_voice = vm.get(seg.speaker, voice)
+        synthesize_segment(seg.text, seg_voice, path, client, language)
+        if tracker:
+            tracker.add_tts_usage(len(seg.text))
+        return idx, path
+
+    done_count = 0
+    with ThreadPoolExecutor(max_workers=_conf.get()["tts"]["workers"]) as pool:
+        futures = {pool.submit(_do, i, seg): i for i, seg in enumerate(segments)}
+        for future in as_completed(futures):
+            idx, path = future.result()
+            paths[idx] = path
+            done_count += 1
+            if done_count % 10 == 0 or done_count == total:
+                print(f"      TTS progress: {done_count}/{total} segments done")
+
+    return paths
