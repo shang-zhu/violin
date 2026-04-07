@@ -1,9 +1,10 @@
-# video-translate
+# VideoLingua
 
 Translate educational videos from one language to another using [Together AI](https://www.together.ai). Replaces the audio track with a dubbed voice in the target language and generates a subtitle file — available as a CLI or a REST API.
 
 ```bash
 uv run main.py lecture.mp4 lecture_zh.mp4 --language Chinese
+#example video can be downloaded here: https://html5.stanford.edu/videos/courses/see/CS229/CS229-lecture01.mp4 (Note that you need to trim it to reduce the cost)
 #keep the logs
 #PYTHONUNBUFFERED=1 uv run main.py examples/CS229-lecture01.mp4 examples/CS229-lecture01_zh.mp4 --language Chinese 2>&1 | tee out.log
 ```
@@ -55,8 +56,8 @@ Video
 ## Installation
 
 ```bash
-git clone https://github.com/your-org/video-translate
-cd video-translate
+git clone https://github.com/shang-zhu/VideoLingua
+cd VideoLingua
 uv sync
 cp .env.example .env
 # fill in your API keys in .env
@@ -77,7 +78,7 @@ Speaker diarization uses gated models. Accept terms at each of these (one-time, 
 uv run main.py lecture.mp4 lecture_es.mp4 --language Spanish
 
 # Skip diarization (single-speaker video, faster)
-uv run main.py lecture.mp4 lecture_zh.mp4 --language Chinese --no-diarize
+uv run main.py lecture.mp4 lecture_zh.mp4 --language Chinese --diarize
 
 # Custom voice
 uv run main.py lecture.mp4 lecture_fr.mp4 --language French --voice "french narrator man"
@@ -96,7 +97,7 @@ uv run main.py lecture.mp4 lecture_ko.mp4 --language Korean --source-language En
 | `--language`, `-l` | *(required)* | Target language name (e.g. `Spanish`, `Japanese`) |
 | `--voice`, `-v` | auto | Cartesia Sonic 3 voice. Defaults to the primary native voice for the target language |
 | `--source-language` | `auto-detect` | Source language hint for translation |
-| `--no-diarize` | off | Skip speaker diarization (faster, single voice) |
+| `--diarize` | off | Conduct speaker diarization (faster, single voice) |
 | `--no-subtitles` | off | Skip SRT generation |
 
 ## REST API
