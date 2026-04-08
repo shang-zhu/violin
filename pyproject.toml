@@ -1,5 +1,5 @@
 [project]
-name = "video-translate"
+name = "VideoLingua"
 version = "0.1.0"
 description = "Translate educational videos into 42 languages using Together AI"
 readme = "README.md"
@@ -30,12 +30,12 @@ dependencies = [
 ]
 
 [project.scripts]
-video-translate = "main:main"
-video-translate-api = "run_api:main"
+videolingua = "main:main"
+videolingua-api = "run_api:main"
 
 [project.urls]
-Repository = "https://github.com/your-org/video-translate"
-Issues = "https://github.com/your-org/video-translate/issues"
+Repository = "https://github.com/shang-zhu/VideoLingua"
+Issues = "https://github.com/shang-zhu/VideoLingua/issues"
 
 [build-system]
 requires = ["hatchling"]

@@ -73,30 +73,43 @@ def _translate_single(
     source_language: str,
     client: Together,
     tracker: CostTracker | None = None,
+    style_directives: str = "",
+    style_temperature: float | None = None,
 ) -> str:
     """Translate one segment with retry on transient API errors."""
     cfg = _conf.get()
     max_retries = cfg["translation"]["max_retries"]
+    temp = style_temperature if style_temperature is not None else cfg["translation"]["temperature"]
+
+    if style_directives:
+        system_msg = (
+            "You are a creative translation engine. Return the result in JSON.\n\n"
+            f"STYLE INSTRUCTIONS (these take priority over everything else):\n{style_directives}"
+        )
+        user_msg = (
+            f"Translate/rewrite the following text from {source_language} to {target_language}.\n"
+            f"Follow the style instructions above — they override normal translation rules.\n"
+            f"If the text is a sentence fragment, handle it as one unit.\n\n"
+            f"Text: {json.dumps(text, ensure_ascii=False)}"
+        )
+    else:
+        system_msg = "You are a translation API. Return the translation in JSON."
+        user_msg = (
+            f"Translate the following text from {source_language} to {target_language}.\n"
+            f"Even if the text is a sentence fragment, translate it as-is. "
+            f"Do NOT add or remove content.\n\n"
+            f"Text: {json.dumps(text, ensure_ascii=False)}"
+        )
+
     for attempt in range(1, max_retries + 1):
         try:
             response = client.chat.completions.create(
                 model=cfg["models"]["translation"],
                 messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a translation API. Return the translation in JSON.",
-                    },
-                    {
-                        "role": "user",
-                        "content": (
-                            f"Translate the following text from {source_language} to {target_language}.\n"
-                            f"Even if the text is a sentence fragment, translate it as-is. "
-                            f"Do NOT add or remove content.\n\n"
-                            f"Text: {json.dumps(text, ensure_ascii=False)}"
-                        ),
-                    },
+                    {"role": "system", "content": system_msg},
+                    {"role": "user", "content": user_msg},
                 ],
-                temperature=cfg["translation"]["temperature"],
+                temperature=temp,
                 response_format={
                     "type": "json_schema",
                     "json_schema": {
@@ -130,41 +143,62 @@ def _try_batch(
     source_language: str,
     client: Together,
     tracker: CostTracker | None = None,
+    style_directives: str = "",
+    style_temperature: float | None = None,
 ) -> list[str] | None:
     """Attempt to translate a batch. Returns translations on success, None on failure."""
     numbered = "\n".join(
         f"[{i}]: {json.dumps(t, ensure_ascii=False)}" for i, t in enumerate(texts)
     )
-    prompt = (
-        f"Translate each numbered segment from {source_language} to {target_language}.\n\n"
-        f"CRITICAL RULES:\n"
-        f"- The \"translations\" array must contain exactly {len(texts)} strings.\n"
-        f"- Segment boundaries are FIXED. Each segment gets exactly one translation.\n"
-        f"- Some segments are sentence fragments — translate the fragment as-is, "
-        f"do NOT merge it with adjacent segments.\n"
-        f"- Keep technical terms, proper nouns, and numbers accurate.\n\n"
-        f"Segments ({len(texts)} total):\n{numbered}"
-    )
+
+    if style_directives:
+        prompt = (
+            f"Translate/rewrite each numbered segment from {source_language} to {target_language}.\n\n"
+            f"STRUCTURAL RULES (always enforced):\n"
+            f"- The \"translations\" array must contain exactly {len(texts)} strings.\n"
+            f"- Segment boundaries are FIXED. Each segment gets exactly one translation.\n"
+            f"- Never merge or split segments.\n\n"
+            f"STYLE RULES (take priority over literal translation):\n"
+            f"Follow the style instructions in the system message. You may freely rephrase,\n"
+            f"simplify, or add flair as the style demands — just keep each segment self-contained.\n\n"
+            f"Segments ({len(texts)} total):\n{numbered}"
+        )
+        system_msg = (
+            "You are a creative translation engine that preserves segment boundaries exactly. "
+            "You receive N numbered text segments and return a JSON object with a "
+            "\"translations\" array of exactly N strings. Never merge or split segments.\n\n"
+            f"STYLE INSTRUCTIONS (these take priority over literal translation):\n{style_directives}"
+        )
+    else:
+        prompt = (
+            f"Translate each numbered segment from {source_language} to {target_language}.\n\n"
+            f"CRITICAL RULES:\n"
+            f"- The \"translations\" array must contain exactly {len(texts)} strings.\n"
+            f"- Segment boundaries are FIXED. Each segment gets exactly one translation.\n"
+            f"- Some segments are sentence fragments — translate the fragment as-is, "
+            f"do NOT merge it with adjacent segments.\n"
+            f"- Keep technical terms, proper nouns, and numbers accurate.\n\n"
+            f"Segments ({len(texts)} total):\n{numbered}"
+        )
+        system_msg = (
+            "You are a translation API that preserves segment boundaries exactly. "
+            "You receive N numbered text segments and return a JSON object with a "
+            "\"translations\" array of exactly N strings. Never merge or split segments."
+        )
 
     cfg = _conf.get()
     max_retries = cfg["translation"]["max_retries"]
+    temp = style_temperature if style_temperature is not None else cfg["translation"]["temperature"]
     for attempt in range(1, max_retries + 1):
         raw = ""
         try:
             response = client.chat.completions.create(
                 model=cfg["models"]["translation"],
                 messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "You are a translation API that preserves segment boundaries exactly. "
-                            "You receive N numbered text segments and return a JSON object with a "
-                            "\"translations\" array of exactly N strings. Never merge or split segments."
-                        ),
-                    },
+                    {"role": "system", "content": system_msg},
                     {"role": "user", "content": prompt},
                 ],
-                temperature=cfg["translation"]["temperature"],
+                temperature=temp,
                 response_format={
                     "type": "json_schema",
                     "json_schema": {
@@ -218,23 +252,24 @@ def _translate_batch(
     source_language: str,
     client: Together,
     tracker: CostTracker | None = None,
+    style_directives: str = "",
+    style_temperature: float | None = None,
 ) -> list[str]:
     """Translate a batch with binary-split fallback on failure."""
-    result = _try_batch(texts, target_language, source_language, client, tracker)
+    result = _try_batch(texts, target_language, source_language, client, tracker, style_directives, style_temperature)
     if result is not None:
         return result
 
-    # Binary split: halve the batch and recurse
     if len(texts) == 1:
         print(f"        → single-segment fallback...", end="", flush=True)
-        t = _translate_single(texts[0], target_language, source_language, client, tracker)
+        t = _translate_single(texts[0], target_language, source_language, client, tracker, style_directives, style_temperature)
         print(" done")
         return [t]
 
     mid = len(texts) // 2
     print(f"      ↓ Splitting failed batch of {len(texts)} → {mid} + {len(texts) - mid}")
-    left = _translate_batch(texts[:mid], target_language, source_language, client, tracker)
-    right = _translate_batch(texts[mid:], target_language, source_language, client, tracker)
+    left = _translate_batch(texts[:mid], target_language, source_language, client, tracker, style_directives, style_temperature)
+    right = _translate_batch(texts[mid:], target_language, source_language, client, tracker, style_directives, style_temperature)
     return left + right
 
 
@@ -244,6 +279,8 @@ def translate_segments(
     client: Together,
     source_language: str = "auto-detect",
     tracker: CostTracker | None = None,
+    style_directives: str = "",
+    style_temperature: float | None = None,
 ) -> list[Segment]:
     """Translate all segments, batching to stay within LLM context limits."""
     translated_texts: list[str] = []
@@ -253,7 +290,9 @@ def translate_segments(
         batch = segments[i : i + batch_size]
         texts = [s.text for s in batch]
         print(f"      Translating segments {i + 1}–{i + len(batch)} / {len(segments)}...")
-        translated_texts.extend(_translate_batch(texts, target_language, source_language, client, tracker))
+        translated_texts.extend(
+            _translate_batch(texts, target_language, source_language, client, tracker, style_directives, style_temperature)
+        )
 
     return [
         Segment(id=s.id, start=s.start, end=s.end, text=t)

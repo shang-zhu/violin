@@ -29,6 +29,7 @@ class JobResponse(BaseModel):
     source_language: str
     diarize: bool
     subtitles: bool
+    style: str = "standard"
     progress: list[ProgressEvent] = Field(default_factory=list)
     error: str | None = None
 
@@ -40,3 +41,4 @@ class CreateJobRequest(BaseModel):
     source_language: str = "auto-detect"
     diarize: bool = True
     subtitles: bool = True
+    style: str = "standard"

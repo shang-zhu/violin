@@ -10,3 +10,6 @@ wheels/
 .venv
 .env
 examples/
+
+#logs
+out_*.log

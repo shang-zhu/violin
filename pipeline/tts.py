@@ -45,23 +45,56 @@ def all_voices() -> dict[str, list[str]]:
     return result
 
 
+def _apply_ssml(text: str, speed: float | None, emotion: str | None) -> str:
+    """Prepend Cartesia SSML tags for speed and emotion when set."""
+    prefix = ""
+    if speed is not None:
+        prefix += f'<speed ratio="{speed}"/> '
+    if emotion:
+        prefix += f'<emotion value="{emotion}"/> '
+    return prefix + text if prefix else text
+
+
 def synthesize_segment(
     text: str,
     voice: str,
     output_path: str,
     client: Together,
     language: str = "en",
+    speed: float | None = None,
+    emotion: str | None = None,
 ) -> str:
     """Synthesize a single text segment to a WAV file."""
     response = client.audio.speech.create(
         model=_conf.get()["models"]["tts"],
-        input=text,
+        input=_apply_ssml(text, speed, emotion),
         voice=voice,
         response_format="wav",
         language=language,
     )
     response.write_to_file(output_path)
     return output_path
+
+
+def tts_one_segment(
+    seg: Segment,
+    voice: str,
+    output_dir: str,
+    client: Together,
+    language: str = "en",
+    voice_map: dict[str, str] | None = None,
+    tracker: CostTracker | None = None,
+    speed: float | None = None,
+    emotion: str | None = None,
+) -> tuple[int, str]:
+    """Synthesize a single Segment and return ``(seg.id, output_path)``."""
+    vm = voice_map or {}
+    path = str(Path(output_dir) / f"seg_{seg.id:05d}.wav")
+    seg_voice = vm.get(seg.speaker, voice)
+    synthesize_segment(seg.text, seg_voice, path, client, language, speed, emotion)
+    if tracker:
+        tracker.add_tts_usage(len(seg.text))
+    return seg.id, path
 
 
 def synthesize_segments(
@@ -72,22 +105,22 @@ def synthesize_segments(
     language: str = "en",
     voice_map: dict[str, str] | None = None,
     tracker: CostTracker | None = None,
+    speed: float | None = None,
+    emotion: str | None = None,
 ) -> list[str]:
     """Synthesize all segments concurrently.
 
-    If voice_map is provided (speaker → voice), each segment uses the voice
-    assigned to its speaker. Falls back to `voice` for unlabeled segments.
+    If voice_map is provided (speaker -> voice), each segment uses the voice
+    assigned to its speaker. Falls back to *voice* for unlabeled segments.
     """
     total = len(segments)
     paths = [""] * total
-    vm = voice_map or {}
 
     def _do(idx: int, seg: Segment) -> tuple[int, str]:
-        path = str(Path(output_dir) / f"seg_{seg.id:05d}.wav")
-        seg_voice = vm.get(seg.speaker, voice)
-        synthesize_segment(seg.text, seg_voice, path, client, language)
-        if tracker:
-            tracker.add_tts_usage(len(seg.text))
+        _, path = tts_one_segment(
+            seg, voice, output_dir, client, language, voice_map, tracker,
+            speed, emotion,
+        )
         return idx, path
 
     done_count = 0

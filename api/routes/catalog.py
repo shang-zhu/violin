@@ -1,10 +1,11 @@
-"""Catalog endpoints: list supported languages and voices."""
+"""Catalog endpoints: list supported languages, voices, and styles."""
 
 from __future__ import annotations
 
 from fastapi import APIRouter
 
 from pipeline.languages import all_languages
+from pipeline.styles import list_styles
 from pipeline.tts import all_voices, native_voices_for
 
 router = APIRouter(tags=["catalog"])
@@ -28,3 +29,17 @@ def voices_for_language(language: str) -> list[str]:
     from pipeline.languages import language_code
     code = language_code(language)
     return native_voices_for(code)
+
+
+@router.get("/styles")
+def get_styles() -> list[dict]:
+    """Return all available translation style profiles."""
+    return [
+        {
+            "name": s.name,
+            "description": s.description,
+            "tts_speed": s.tts_speed,
+            "tts_emotion": s.tts_emotion,
+        }
+        for s in list_styles()
+    ]
