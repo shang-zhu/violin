@@ -1,12 +1,18 @@
 """Transcribe audio using Together AI's Whisper Large v3."""
 
 import re
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
+import httpx
 from together import Together
 
 from . import config as _conf
+
+_MAX_RETRIES = 3
+_RETRY_BACKOFF = [5, 15, 30]  # seconds — generous for long diarization requests
+_TIMEOUT = 600  # 10 minutes — diarization on long audio can take a while
 
 # Whisper hallucinates these patterns on music, silence, and noise.
 _HALLUCINATION_RE = re.compile(
@@ -113,23 +119,92 @@ def _is_valid(s: dict | object) -> bool:
     return True
 
 
-def transcribe(audio_path: str, client: Together) -> list[Segment]:
-    """Return clean, timestamped segments from audio file."""
-    with open(audio_path, "rb") as f:
-        response = client.audio.transcriptions.create(
-            file=(Path(audio_path).name, f),
-            model=_conf.get()["models"]["transcription"],
-            response_format="verbose_json",
-        )
+def _g(s: dict | object, key: str, default=None):
+    """Attribute-or-dict accessor for API response objects."""
+    if isinstance(s, dict):
+        return s.get(key, default)
+    return getattr(s, key, default)
 
-    def g(s, key, default=None):
-        if isinstance(s, dict):
-            return s.get(key, default)
-        return getattr(s, key, default)
+
+def transcribe(
+    audio_path: str,
+    client: Together,
+    diarize: bool = False,
+) -> list[Segment]:
+    """Return clean, timestamped segments from audio file.
+
+    When *diarize* is True, passes ``diarize="true"`` to Together's Whisper API
+    and labels each segment with the dominant speaker derived from the returned
+    ``speaker_segments``.
+    """
+    extra_kwargs: dict = {}
+    if diarize:
+        extra_kwargs["diarize"] = "true"
+
+    model = _conf.get()["models"]["transcription"]
+    response = None
+    for attempt in range(_MAX_RETRIES):
+        try:
+            with open(audio_path, "rb") as f:
+                response = client.audio.transcriptions.create(
+                    file=(Path(audio_path).name, f),
+                    model=model,
+                    response_format="verbose_json",
+                    timeout=_TIMEOUT,
+                    **extra_kwargs,
+                )
+            break
+        except (httpx.ReadTimeout, httpx.TimeoutException) as exc:
+            wait = _RETRY_BACKOFF[min(attempt, len(_RETRY_BACKOFF) - 1)]
+            if attempt < _MAX_RETRIES - 1:
+                print(f"      Transcription timed out (attempt {attempt + 1}), "
+                      f"retrying in {wait}s...")
+                time.sleep(wait)
+            else:
+                raise RuntimeError(
+                    f"Transcription timed out after {_MAX_RETRIES} attempts"
+                ) from exc
+        except Exception as exc:
+            wait = _RETRY_BACKOFF[min(attempt, len(_RETRY_BACKOFF) - 1)]
+            if attempt < _MAX_RETRIES - 1:
+                print(f"      Transcription error (attempt {attempt + 1}): {exc}, "
+                      f"retrying in {wait}s...")
+                time.sleep(wait)
+            else:
+                raise
+
+    assert response is not None
 
     valid = [s for s in response.segments if _is_valid(s)]
-
-    return [
-        Segment(id=i, start=g(s, "start"), end=g(s, "end"), text=g(s, "text").strip())
+    segments = [
+        Segment(id=i, start=_g(s, "start"), end=_g(s, "end"), text=_g(s, "text").strip())
         for i, s in enumerate(valid)
     ]
+
+    if diarize:
+        speaker_segs = getattr(response, "speaker_segments", None) or []
+        turns = [
+            (_g(ss, "start"), _g(ss, "end"), _g(ss, "speaker_id", "SPEAKER_00"))
+            for ss in speaker_segs
+        ]
+        if turns:
+            for seg in segments:
+                overlap: dict[str, float] = {}
+                for t_start, t_end, spk in turns:
+                    o = min(seg.end, t_end) - max(seg.start, t_start)
+                    if o > 0:
+                        overlap[spk] = overlap.get(spk, 0) + o
+                if overlap:
+                    seg.speaker = max(overlap, key=overlap.get)
+
+    return segments
+
+
+def find_main_speaker(segments: list[Segment]) -> str:
+    """Return the speaker_id with the longest total speaking duration."""
+    durations: dict[str, float] = {}
+    for seg in segments:
+        durations[seg.speaker] = durations.get(seg.speaker, 0) + (seg.end - seg.start)
+    if not durations:
+        return "SPEAKER_00"
+    return max(durations, key=durations.get)

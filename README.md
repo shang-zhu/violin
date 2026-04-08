@@ -179,7 +179,7 @@ All 42 languages supported by Cartesia Sonic 3, with native-matched voices where
 ## Project Structure
 
 ```
-video-translate/
+VideoLingua/
 ├── main.py                  # CLI entry point
 ├── run_api.py               # API server entry point
 ├── pipeline/

@@ -26,6 +26,7 @@ async def create_translation_job(
     source_language: str = Form("auto-detect", description="Source language hint for translation"),
     diarize: bool = Form(True, description="Run speaker diarization"),
     subtitles: bool = Form(True, description="Generate SRT subtitle file"),
+    style: str = Form("standard", description="Translation style profile (e.g. standard, kids, academic)"),
 ):
     """Upload a video and start a translation job. Returns immediately with a job ID."""
     suffix = Path(file.filename or "video.mp4").suffix.lower()
@@ -42,6 +43,7 @@ async def create_translation_job(
         "source_language": source_language,
         "diarize": diarize,
         "subtitles": subtitles,
+        "style": style,
     }
 
     # Persist metadata first so GET /jobs/{id} works immediately
