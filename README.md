@@ -43,6 +43,7 @@ Video
 - **Hallucination filtering** — removes Whisper noise segments (`[Music]`, single-word fragments, sub-0.8s clips)
 - **Natural dubbing speed** — no aggressive pitch/tempo distortion; segments play at natural TTS speed
 - **SRT subtitles** generated alongside every output video
+- **Video chat UI** — watch the translated video and ask in-context questions against nearby subtitles plus sampled frames
 - **REST API** — submit jobs, poll status, download results over HTTP
 - **Single provider** — everything runs through Together AI except local diarization
 
@@ -120,6 +121,8 @@ Options: `--host`, `--port`, `--reload` (dev mode).
 | `GET` | `/jobs/{id}` | Poll job status and progress |
 | `GET` | `/jobs/{id}/video` | Download the dubbed video (when done) |
 | `GET` | `/jobs/{id}/srt` | Download the SRT subtitle file (when done) |
+| `GET` | `/jobs/{id}/segments` | Fetch aligned subtitle segments for player/chat context |
+| `POST` | `/jobs/{id}/chat` | Ask a question about the current video moment using subtitle + visual context |
 | `DELETE` | `/jobs/{id}` | Delete a job and its files |
 | `GET` | `/languages` | List all supported language names |
 | `GET` | `/voices` | List all native voices by language code |

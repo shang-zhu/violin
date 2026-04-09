@@ -6,6 +6,7 @@ Each job lives in JOBS_DIR/{job_id}/:
     input.<ext>     — uploaded source video
     output.mp4      — dubbed video (present when status=done)
     output.srt      — subtitle file (present when status=done and subtitles=True)
+    segments.json   — aligned subtitle/timeline segments for playback + chat context
 """
 
 from __future__ import annotations
@@ -108,6 +109,24 @@ def output_video_path(job_id: str) -> Path:
 
 def output_srt_path(job_id: str) -> Path:
     return _job_dir(job_id) / "output.srt"
+
+
+def segments_path(job_id: str) -> Path:
+    return _job_dir(job_id) / "segments.json"
+
+
+def save_segments(job_id: str, segments: list[dict[str, Any]]) -> None:
+    segments_path(job_id).write_text(
+        json.dumps(segments, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def load_segments(job_id: str) -> list[dict[str, Any]]:
+    path = segments_path(job_id)
+    if not path.exists():
+        return []
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def delete_job(job_id: str) -> bool:
