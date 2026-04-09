@@ -26,6 +26,7 @@ from .storage import (
     input_path,
     output_srt_path,
     output_video_path,
+    save_segments,
     update_status,
 )
 
@@ -99,6 +100,19 @@ def _run_job(job_id: str, params: dict) -> None:
             _progress(job_id, 5, "Building aligned video…")
             aligned_segments = build_aligned_video(
                 str(src), translated, tts_paths, total_duration, str(out_video),
+            )
+            save_segments(
+                job_id,
+                [
+                    {
+                        "id": seg.id,
+                        "start": seg.start,
+                        "end": seg.end,
+                        "text": seg.text,
+                        "speaker": seg.speaker,
+                    }
+                    for seg in aligned_segments
+                ],
             )
 
             if subtitles:

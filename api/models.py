@@ -40,3 +40,30 @@ class CreateJobRequest(BaseModel):
     source_language: str = "auto-detect"
     diarize: bool = True
     subtitles: bool = True
+
+
+class SubtitleSegment(BaseModel):
+    id: int
+    start: float
+    end: float
+    text: str
+    speaker: str = "SPEAKER_00"
+
+
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+
+class VideoChatRequest(BaseModel):
+    question: str
+    current_time: float = Field(ge=0)
+    history: list[ChatMessage] = Field(default_factory=list)
+
+
+class VideoChatResponse(BaseModel):
+    answer: str
+    context_start: float
+    context_end: float
+    subtitle_context: list[SubtitleSegment] = Field(default_factory=list)
+    sampled_timestamps: list[float] = Field(default_factory=list)

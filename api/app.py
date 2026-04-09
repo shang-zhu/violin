@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from .routes import catalog, files, jobs
+from .routes import catalog, chat, files, jobs
 
 _STATIC = pathlib.Path(__file__).parent / "static"
 
@@ -24,6 +24,7 @@ app = FastAPI(
 app.include_router(jobs.router)
 app.include_router(files.router)
 app.include_router(catalog.router)
+app.include_router(chat.router)
 
 app.mount("/static", StaticFiles(directory=str(_STATIC)), name="static")
 

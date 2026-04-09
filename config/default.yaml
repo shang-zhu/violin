@@ -4,8 +4,9 @@
 # ── Models ──────────────────────────────────────────────────
 models:
   transcription: "openai/whisper-large-v3"
-  translation: "Qwen/Qwen3-235B-A22B-Instruct-2507-tput"
+  translation: "google/gemma-3n-E4B-it"
   tts: "cartesia/sonic-3"
+  video_chat: "Qwen/Qwen3.5-397B-A17B"
 
 # ── Pricing (Together AI serverless, https://together.ai/pricing) ──
 pricing:
@@ -23,7 +24,7 @@ translation:
 
 # ── TTS ─────────────────────────────────────────────────────
 tts:
-  workers: 16
+  workers: 1
 
 # ── Pipeline defaults ───────────────────────────────────────────
 pipeline:
@@ -49,3 +50,12 @@ merge_video:
 api:
   jobs_dir: "jobs"
   max_workers: 8
+
+# ── Video chat ──────────────────────────────────────────────
+chat:
+  context_window_seconds: 60
+  frame_interval_seconds: 10
+  max_frames: 6
+  temperature: 0.2
+  max_tokens: 512
+  model: "Qwen/Qwen3.5-397B-A17B"

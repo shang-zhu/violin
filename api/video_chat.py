@@ -1,0 +1,191 @@
+"""Frame-aware chat helpers built on Together chat models."""
+
+from __future__ import annotations
+
+import base64
+import os
+import subprocess
+import tempfile
+from pathlib import Path
+
+from dotenv import load_dotenv
+from together import Together
+
+from api.models import ChatMessage, SubtitleSegment, VideoChatResponse
+from api.storage import get_job, load_segments, output_video_path
+from pipeline import config as _conf
+from pipeline.ffmpeg_utils import FFMPEG_EXE, get_duration_video
+
+load_dotenv()
+
+
+def _chat_cfg() -> dict:
+    cfg = _conf.get()
+    chat = dict(cfg["chat"])
+    chat.setdefault("model", cfg["models"].get("video_chat"))
+    return chat
+
+
+def _pick_context_window(segments: list[SubtitleSegment], current_time: float) -> tuple[float, float, list[SubtitleSegment]]:
+    half_window = _chat_cfg()["context_window_seconds"] / 2
+    window_start = max(0.0, current_time - half_window)
+    window_end = current_time + half_window
+
+    selected = [
+        segment
+        for segment in segments
+        if segment.end >= window_start and segment.start <= window_end
+    ]
+
+    if selected:
+        window_start = min(window_start, selected[0].start)
+        window_end = max(window_end, selected[-1].end)
+
+    return window_start, window_end, selected
+
+
+def _sample_timestamps(video_duration: float, window_start: float, window_end: float) -> list[float]:
+    cfg = _chat_cfg()
+    interval = max(1, int(cfg["frame_interval_seconds"]))
+    max_frames = max(1, int(cfg["max_frames"]))
+
+    timestamps: list[float] = []
+    t = window_start
+    while t <= window_end and len(timestamps) < max_frames:
+        timestamps.append(round(min(max(t, 0.0), max(video_duration - 0.1, 0.0)), 2))
+        t += interval
+
+    if not timestamps:
+        timestamps.append(round(min(max(window_start, 0.0), max(video_duration - 0.1, 0.0)), 2))
+
+    return timestamps
+
+
+def _frame_as_data_url(video_path: Path, timestamp: float) -> str:
+    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+        frame_path = Path(tmp.name)
+
+    try:
+        subprocess.run(
+            [
+                FFMPEG_EXE,
+                "-ss",
+                str(timestamp),
+                "-i",
+                str(video_path),
+                "-frames:v",
+                "1",
+                "-q:v",
+                "4",
+                "-y",
+                str(frame_path),
+            ],
+            check=True,
+            capture_output=True,
+        )
+        encoded = base64.b64encode(frame_path.read_bytes()).decode("ascii")
+        return f"data:image/jpeg;base64,{encoded}"
+    finally:
+        frame_path.unlink(missing_ok=True)
+
+
+def _build_messages(
+    history: list[ChatMessage],
+    question: str,
+    subtitle_context: list[SubtitleSegment],
+    frame_urls: list[str],
+    current_time: float,
+    window_start: float,
+    window_end: float,
+) -> list[dict]:
+    transcript_lines = [
+        f"[{segment.start:.2f}-{segment.end:.2f}] {segment.text}"
+        for segment in subtitle_context
+    ]
+    transcript_block = "\n".join(transcript_lines) or "(no subtitle lines found in this window)"
+
+    messages: list[dict] = [
+        {
+            "role": "system",
+            "content": (
+                "You answer questions about the video currently being watched. "
+                "Use the supplied subtitle window and sampled input frames as the primary context. "
+                "When that context is missing, weak, or incomplete, you may still answer using common sense "
+                "or general knowledge, but clearly distinguish that from context-grounded observations. "
+                "Do not invent specific events, dialogue, or visuals that are not supported by the provided context."
+            ),
+        }
+    ]
+
+    for item in history[-8:]:
+        if item.role not in {"user", "assistant"}:
+            continue
+        messages.append({"role": item.role, "content": item.content})
+
+    user_content: list[dict] = [
+        {
+            "type": "text",
+            "text": (
+                f"Current playback time: {current_time:.2f}s.\n"
+                f"Subtitle context window: {window_start:.2f}s to {window_end:.2f}s.\n\n"
+                f"Surrounding subtitles:\n{transcript_block}\n\n"
+                f"Input image count: {len(frame_urls)}.\n"
+                "Only the sampled input frames are attached as images; no video file is attached. "
+                "If the provided subtitle or visual context does not fully answer the question, "
+                "you may give a best-effort commonsense answer and label it as an inference.\n\n"
+                f"User question: {question}"
+            ),
+        }
+    ]
+    user_content.extend({"type": "image_url", "image_url": {"url": url}} for url in frame_urls)
+    messages.append({"role": "user", "content": user_content})
+    return messages
+
+
+def answer_video_question(job_id: str, question: str, current_time: float, history: list[ChatMessage]) -> VideoChatResponse:
+    api_key = os.environ.get("TOGETHER_API_KEY")
+    if not api_key:
+        raise RuntimeError("TOGETHER_API_KEY is not configured.")
+
+    job = get_job(job_id)
+    if job is None:
+        raise FileNotFoundError(f"Job '{job_id}' not found.")
+    if job.status != "done":
+        raise RuntimeError(f"Job '{job_id}' is not complete.")
+
+    video_path = output_video_path(job_id)
+    if not video_path.exists():
+        raise FileNotFoundError("Output video not found.")
+
+    segments = [SubtitleSegment(**item) for item in load_segments(job_id)]
+    window_start, window_end, subtitle_context = _pick_context_window(segments, current_time)
+    duration = get_duration_video(str(video_path))
+    sampled_timestamps = _sample_timestamps(duration, window_start, window_end)
+    frame_urls = [_frame_as_data_url(video_path, ts) for ts in sampled_timestamps]
+
+    client = Together(api_key=api_key)
+    cfg = _chat_cfg()
+    response = client.chat.completions.create(
+        model=cfg["model"],
+        messages=_build_messages(
+            history=history,
+            question=question,
+            subtitle_context=subtitle_context,
+            frame_urls=frame_urls,
+            current_time=current_time,
+            window_start=window_start,
+            window_end=window_end,
+        ),
+        temperature=cfg["temperature"],
+        max_tokens=cfg["max_tokens"],
+        extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+    )
+
+    answer = response.choices[0].message.content.strip()
+    return VideoChatResponse(
+        answer=answer,
+        context_start=window_start,
+        context_end=window_end,
+        subtitle_context=subtitle_context,
+        sampled_timestamps=sampled_timestamps,
+    )
