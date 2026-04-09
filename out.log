@@ -1,106 +1,47 @@
 
-[1/5] Extracting audio from examples/CS229-lecture01.mp4...
-      Duration: 4119.5s
+[1/5] Extracting audio from examples/test_input_chunk1.mp4...
+      Duration: 314.0s
 
-[2/5] Transcribing with Whisper Large v3...
-      352 segments found
-      Merged 352 → 274 segments (sentence grouping)
+[2/5] Transcribing with Whisper Large v3 + speaker diarization...
+      22 segments found
+      Speakers detected: 2
+        SPEAKER_01: 291.2s <-- main
+        SPEAKER_00: 4.8s
+      Translating 21 segments from SPEAKER_01
+      Preserving 1 segments from other speakers (original audio)
+      Merged 21 → 15 segments (sentence grouping)
 
-[3/5] Translating to Chinese with Qwen3.5-397B...
-      Translating segments 1–64 / 274...
-      ⚠ Parse error (attempt 1): Unterminated string starting at: line 39 column 5 (char 3757), retrying...
-      ⚠ Parse error (attempt 2): Unterminated string starting at: line 39 column 5 (char 3721), retrying...
-      ↓ Splitting failed batch of 64 → 32 + 32
-      ⚠ Count mismatch (attempt 1), retrying...
-      ⚠ Count mismatch (attempt 2), retrying...
-      ↓ Splitting failed batch of 32 → 16 + 16
-      Translating segments 65–128 / 274...
-      ⚠ Parse error (attempt 1): Unterminated string starting at: line 57 column 5 (char 3617), retrying...
-      ⚠ Parse error (attempt 2): Unterminated string starting at: line 57 column 5 (char 3623), retrying...
-      ↓ Splitting failed batch of 64 → 32 + 32
-      Translating segments 129–192 / 274...
-      ⚠ Parse error (attempt 1): Unterminated string starting at: line 60 column 5 (char 3605), retrying...
-      ⚠ Parse error (attempt 2): Unterminated string starting at: line 60 column 5 (char 3598), retrying...
-      ↓ Splitting failed batch of 64 → 32 + 32
-      Translating segments 193–256 / 274...
-      ⚠ Parse error (attempt 1): Unterminated string starting at: line 60 column 5 (char 3736), retrying...
-      ⚠ Parse error (attempt 2): Unterminated string starting at: line 60 column 5 (char 3674), retrying...
-      ↓ Splitting failed batch of 64 → 32 + 32
-      Translating segments 257–274 / 274...
-      Post-translation merge: 274 → 270 segments
+[3/5] Translating to Chinese...
+      Translating segments 1–15 / 15...
+      ⚠ API error (attempt 1): Error code: 503 - {'id': 'oeMibtC-2j9zxn-9e93f6057da67b82', 'error': {'message': 'Service unavailable', 'type': 'service_unavailable_error', 'param': None, 'code': None}}, retrying in 2s...
 
 [4/5] Synthesizing dubbed audio with Cartesia Sonic 3...
-      TTS progress: 10/270 segments done
-      TTS progress: 20/270 segments done
-      TTS progress: 30/270 segments done
-      TTS progress: 40/270 segments done
-      TTS progress: 50/270 segments done
-      TTS progress: 60/270 segments done
-      TTS progress: 70/270 segments done
-      TTS progress: 80/270 segments done
-      TTS progress: 90/270 segments done
-      TTS progress: 100/270 segments done
-      TTS progress: 110/270 segments done
-      TTS progress: 120/270 segments done
-      TTS progress: 130/270 segments done
-      TTS progress: 140/270 segments done
-      TTS progress: 150/270 segments done
-      TTS progress: 160/270 segments done
-      TTS progress: 170/270 segments done
-      TTS progress: 180/270 segments done
-      TTS progress: 190/270 segments done
-      TTS progress: 200/270 segments done
-      TTS progress: 210/270 segments done
-      TTS progress: 220/270 segments done
-      TTS progress: 230/270 segments done
-      TTS progress: 240/270 segments done
-      TTS progress: 250/270 segments done
-      TTS progress: 260/270 segments done
-      TTS progress: 270/270 segments done
+      TTS progress: 10/15 segments done
+      TTS progress: 15/15 segments done
 
 [5/5] Building aligned video...
       Source fps: 30.0
-      Building 514 video chunks (8 workers)...
-      Chunk progress: 25/514
-      Chunk progress: 50/514
-      Chunk progress: 75/514
-      Chunk progress: 100/514
-      Chunk progress: 125/514
-      Chunk progress: 150/514
-      Chunk progress: 175/514
-      Chunk progress: 200/514
-      Chunk progress: 225/514
-      Chunk progress: 250/514
-      Chunk progress: 275/514
-      Chunk progress: 300/514
-      Chunk progress: 325/514
-      Chunk progress: 350/514
-      Chunk progress: 375/514
-      Chunk progress: 400/514
-      Chunk progress: 425/514
-      Chunk progress: 450/514
-      Chunk progress: 475/514
-      Chunk progress: 500/514
-      Chunk progress: 514/514
+      12 gap chunks pre-built; building 15 speech chunks (16 workers)...
+      Chunk progress: 15/15
       Concatenating chunks...
-      Subtitles → examples/CS229-lecture01_zh.srt
+      Subtitles → examples/test-input-chunk1_zh.srt
 
-Done! Output → examples/CS229-lecture01_zh.mp4
+Done! Output → examples/test-input-chunk1_zh.mp4
 
 ==============================================================
   COST & TIME SUMMARY
 ==============================================================
-  Audio extraction               0m16.2s  ( 1.0%)
-  Transcription (Whisper)        0m25.6s  ( 1.6%)
-  Translation (LLM)              13m50.8s  (52.2%)
-  TTS (Cartesia Sonic 3)         1m07.2s  ( 4.2%)
-  Video alignment & merge        10m50.6s  (40.9%)
+  Audio extraction               0m00.2s  ( 0.2%)
+  Transcription (Whisper)        0m05.8s  ( 5.0%)
+  Translation (LLM)              1m27.2s  (75.6%)
+  TTS (Cartesia Sonic 3)         0m20.1s  (17.4%)
+  Video alignment & merge        0m02.0s  ( 1.8%)
   ────────────────────────────────────────────────────────
-  Total wall time                26m30.4s
+  Total wall time                1m55.3s
 
-  Transcription             68.7 min          $  0.1030
-  Translation             67,900 in /  40,425 out  $  0.0689  (25 calls)
-  TTS                     17,945 chars        $  1.1664  (270 calls)
+  Transcription              5.2 min          $  0.0079
+  Translation              1,234 in /     912 out  $  0.0015  (1 calls)
+  TTS                      1,528 chars        $  0.0993  (15 calls)
   ────────────────────────────────────────────────────────
-  TOTAL API COST                             $  1.3383
+  TOTAL API COST                             $  0.1086
 ==============================================================

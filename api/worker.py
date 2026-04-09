@@ -5,17 +5,18 @@ from __future__ import annotations
 import os
 import shutil
 import tempfile
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from dotenv import load_dotenv
 from together import Together
 
-from pipeline.diarizer import assign_speakers
 from pipeline.extractor import extract_audio, get_video_duration
 from pipeline.languages import language_code
-from pipeline.merger import build_aligned_video, generate_srt
-from pipeline.transcriber import merge_continuous_segments, transcribe
+from pipeline.merger import build_aligned_video, build_gap_chunks, generate_srt, prepare_merge
+from pipeline.styles import resolve as resolve_style
+from pipeline.transcriber import find_main_speaker, merge_continuous_segments, transcribe
 from pipeline.translator import translate_segments
 from pipeline.tts import native_voices_for, synthesize_segments
 
@@ -49,16 +50,12 @@ def _run_job(job_id: str, params: dict) -> None:
         update_status(job_id, JobStatus.failed, "TOGETHER_API_KEY is not configured.")
         return
 
-    hf_token = os.environ.get("HF_TOKEN")
     target_language = params["language"]
     voice = params["voice"]
     source_language = params["source_language"]
     diarize = params["diarize"]
     subtitles = params["subtitles"]
-
-    if diarize and not hf_token:
-        update_status(job_id, JobStatus.failed, "HF_TOKEN is not configured; cannot run diarization.")
-        return
+    style = resolve_style(params.get("style", "standard"))
 
     try:
         src = input_path(job_id)
@@ -73,33 +70,62 @@ def _run_job(job_id: str, params: dict) -> None:
             audio_path = extract_audio(str(src), str(tmp_dir / "audio.wav"))
             total_duration = get_video_duration(str(src))
 
-            _progress(job_id, 2, f"Transcribing with Whisper Large v3… (video duration: {total_duration:.0f}s)")
-            segments = transcribe(audio_path, client)
+            label = "Transcribing with Whisper Large v3…"
+            if diarize:
+                label += " (+ diarization)"
+            _progress(job_id, 2, f"{label} (video duration: {total_duration:.0f}s)")
+            segments = transcribe(audio_path, client, diarize=diarize)
 
             lang_code = language_code(target_language)
-            voice_map: dict[str, str] | None = None
 
             if diarize:
-                _progress(job_id, 2, "Diarizing speakers with pyannote…")
-                segments, voice_map = assign_speakers(segments, audio_path, hf_token, lang_code)
+                main_speaker = find_main_speaker(segments)
+                segments = [s for s in segments if s.speaker == main_speaker]
 
             segments = merge_continuous_segments(segments)
-            _progress(job_id, 3, f"Translating {len(segments)} segments to {target_language}…")
-            translated = translate_segments(segments, target_language, client, source_language)
+
+            _progress(job_id, 3, f"Translating {len(segments)} segments to {target_language} "
+                       f"(style: {style.name})…")
+            translated = translate_segments(
+                segments, target_language, client, source_language,
+                style_directives=style.translation_directives,
+                style_temperature=style.temperature,
+            )
             translated = merge_continuous_segments(translated)
 
             effective_voice = voice or native_voices_for(lang_code)[0]
             _progress(job_id, 4, f"Synthesizing TTS with Cartesia Sonic 3 (voice: {effective_voice})…")
             tts_dir = tmp_dir / "tts"
             tts_dir.mkdir()
+
+            plan = prepare_merge(
+                str(src), translated, total_duration,
+                preserve_gap_audio=diarize,
+            )
+            gap_exc: list[Exception] = []
+
+            def _build_gaps():
+                try:
+                    build_gap_chunks(plan)
+                except Exception as e:
+                    gap_exc.append(e)
+
+            gap_thread = threading.Thread(target=_build_gaps, daemon=True)
+            gap_thread.start()
+
             tts_paths = synthesize_segments(
                 translated, effective_voice, str(tts_dir), client,
-                language=lang_code, voice_map=voice_map,
+                language=lang_code,
+                speed=style.tts_speed, emotion=style.tts_emotion,
             )
+            gap_thread.join()
+            if gap_exc:
+                raise gap_exc[0]
 
             _progress(job_id, 5, "Building aligned video…")
             aligned_segments = build_aligned_video(
                 str(src), translated, tts_paths, total_duration, str(out_video),
+                merge_plan=plan,
             )
             save_segments(
                 job_id,

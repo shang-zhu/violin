@@ -29,6 +29,7 @@ class JobResponse(BaseModel):
     source_language: str
     diarize: bool
     subtitles: bool
+    style: str = "standard"
     progress: list[ProgressEvent] = Field(default_factory=list)
     error: str | None = None
 
@@ -67,3 +68,4 @@ class VideoChatResponse(BaseModel):
     context_end: float
     subtitle_context: list[SubtitleSegment] = Field(default_factory=list)
     sampled_timestamps: list[float] = Field(default_factory=list)
+    style: str = "standard"
