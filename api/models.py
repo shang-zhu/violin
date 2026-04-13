@@ -56,10 +56,25 @@ class ChatMessage(BaseModel):
     content: str
 
 
+class VoiceMatchRequest(BaseModel):
+    description: str
+    language: str = ""
+
+
+class VoiceCandidate(BaseModel):
+    voice: str
+    explanation: str
+
+
+class VoiceMatchResponse(BaseModel):
+    candidates: list[VoiceCandidate]
+
+
 class VideoChatRequest(BaseModel):
     question: str
     current_time: float = Field(ge=0)
     history: list[ChatMessage] = Field(default_factory=list)
+    language: str = ""
 
 
 class VideoChatResponse(BaseModel):

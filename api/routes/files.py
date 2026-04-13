@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 
 from api.models import JobStatus
-from api.storage import get_job, output_srt_path, output_video_path
+from api.storage import get_job, original_audio_path, output_srt_path, output_video_path
 
 router = APIRouter(prefix="/jobs", tags=["files"])
 
@@ -33,6 +33,23 @@ def download_video(job_id: str):
         path=str(path),
         media_type="video/mp4",
         filename=f"{job_id}_dubbed.mp4",
+    )
+
+
+@router.get("/{job_id}/original-audio")
+def get_original_audio(job_id: str):
+    """Serve the original audio track (aligned to the dubbed timeline) for voice-over mixing."""
+    _assert_done(job_id)
+    path = original_audio_path(job_id)
+    if not path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="Original audio track not available. The job may not have used voice-over mode.",
+        )
+    return FileResponse(
+        path=str(path),
+        media_type="audio/mp4",
+        filename=f"{job_id}_original.m4a",
     )
 
 

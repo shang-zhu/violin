@@ -4,7 +4,7 @@
 # ── Models ──────────────────────────────────────────────────
 models:
   transcription: "openai/whisper-large-v3"
-  translation: "google/gemma-3n-E4B-it"
+  translation: "Qwen/Qwen3.5-397B-A17B"
   tts: "cartesia/sonic-3"
   video_chat: "Qwen/Qwen3.5-397B-A17B"
 
@@ -67,7 +67,7 @@ styles:
         - Drop filler phrases, hedging, and verbose academic courtesy.
         - Keep proper names (people, places, courses) but simplify everything else.
     tts:
-      speed: 0.85
+      speed: null
       emotion: "excited"
 
   academic:

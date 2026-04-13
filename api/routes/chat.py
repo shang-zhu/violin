@@ -29,6 +29,7 @@ def chat_with_video(job_id: str, payload: VideoChatRequest):
             question=payload.question,
             current_time=payload.current_time,
             history=payload.history,
+            language=payload.language,
         )
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

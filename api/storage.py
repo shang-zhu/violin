@@ -111,6 +111,10 @@ def output_srt_path(job_id: str) -> Path:
     return _job_dir(job_id) / "output.srt"
 
 
+def original_audio_path(job_id: str) -> Path:
+    return _job_dir(job_id) / "original_audio.m4a"
+
+
 def segments_path(job_id: str) -> Path:
     return _job_dir(job_id) / "segments.json"
 

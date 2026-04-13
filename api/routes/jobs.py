@@ -24,9 +24,10 @@ async def create_translation_job(
     language: str = Form(..., description="Target language name, e.g. Spanish, Japanese"),
     voice: str = Form("", description="Cartesia Sonic 3 voice (empty = auto native voice)"),
     source_language: str = Form("auto-detect", description="Source language hint for translation"),
-    diarize: bool = Form(True, description="Run speaker diarization"),
+    diarize: bool = Form(False, description="Run speaker diarization"),
     subtitles: bool = Form(True, description="Generate SRT subtitle file"),
     style: str = Form("standard", description="Translation style profile (e.g. standard, kids, academic)"),
+    voiceover: bool = Form(True, description="Voice-over mode: keep original audio underneath the dub"),
 ):
     """Upload a video and start a translation job. Returns immediately with a job ID."""
     suffix = Path(file.filename or "video.mp4").suffix.lower()
@@ -44,6 +45,7 @@ async def create_translation_job(
         "diarize": diarize,
         "subtitles": subtitles,
         "style": style,
+        "voiceover": voiceover,
     }
 
     # Persist metadata first so GET /jobs/{id} works immediately
