@@ -61,12 +61,13 @@ def _sample_timestamps(video_duration: float, window_start: float, window_end: f
     return timestamps
 
 
-def _frame_as_data_url(video_path: Path, timestamp: float) -> str:
+def _frame_as_data_url(video_path: Path, timestamp: float) -> str | None:
+    """Extract a single frame as a base64 data URL. Returns None on failure."""
     with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
         frame_path = Path(tmp.name)
 
     try:
-        subprocess.run(
+        result = subprocess.run(
             [
                 FFMPEG_EXE,
                 "-ss",
@@ -80,11 +81,14 @@ def _frame_as_data_url(video_path: Path, timestamp: float) -> str:
                 "-y",
                 str(frame_path),
             ],
-            check=True,
             capture_output=True,
         )
+        if result.returncode != 0 or not frame_path.exists() or frame_path.stat().st_size == 0:
+            return None
         encoded = base64.b64encode(frame_path.read_bytes()).decode("ascii")
         return f"data:image/jpeg;base64,{encoded}"
+    except Exception:
+        return None
     finally:
         frame_path.unlink(missing_ok=True)
 
@@ -97,6 +101,7 @@ def _build_messages(
     current_time: float,
     window_start: float,
     window_end: float,
+    language: str = "",
 ) -> list[dict]:
     transcript_lines = [
         f"[{segment.start:.2f}-{segment.end:.2f}] {segment.text}"
@@ -104,10 +109,15 @@ def _build_messages(
     ]
     transcript_block = "\n".join(transcript_lines) or "(no subtitle lines found in this window)"
 
+    lang_instruction = ""
+    if language:
+        lang_instruction = f"Always reply in {language}. "
+
     messages: list[dict] = [
         {
             "role": "system",
             "content": (
+                f"{lang_instruction}"
                 "You answer questions about the video currently being watched. "
                 "Use the supplied subtitle window and sampled input frames as the primary context. "
                 "When that context is missing, weak, or incomplete, you may still answer using common sense "
@@ -142,7 +152,7 @@ def _build_messages(
     return messages
 
 
-def answer_video_question(job_id: str, question: str, current_time: float, history: list[ChatMessage]) -> VideoChatResponse:
+def answer_video_question(job_id: str, question: str, current_time: float, history: list[ChatMessage], language: str = "") -> VideoChatResponse:
     api_key = os.environ.get("TOGETHER_API_KEY")
     if not api_key:
         raise RuntimeError("TOGETHER_API_KEY is not configured.")
@@ -161,7 +171,10 @@ def answer_video_question(job_id: str, question: str, current_time: float, histo
     window_start, window_end, subtitle_context = _pick_context_window(segments, current_time)
     duration = get_duration_video(str(video_path))
     sampled_timestamps = _sample_timestamps(duration, window_start, window_end)
-    frame_urls = [_frame_as_data_url(video_path, ts) for ts in sampled_timestamps]
+    frame_urls = [
+        url for ts in sampled_timestamps
+        if (url := _frame_as_data_url(video_path, ts)) is not None
+    ]
 
     client = Together(api_key=api_key)
     cfg = _chat_cfg()
@@ -175,6 +188,7 @@ def answer_video_question(job_id: str, question: str, current_time: float, histo
             current_time=current_time,
             window_start=window_start,
             window_end=window_end,
+            language=language,
         ),
         temperature=cfg["temperature"],
         max_tokens=cfg["max_tokens"],

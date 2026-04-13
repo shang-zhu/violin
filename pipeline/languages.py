@@ -13,7 +13,6 @@ LANG_CODES: dict[str, str] = {
     "japanese": "ja",
     "korean": "ko",
     "chinese": "zh",
-    "mandarin": "zh",
     "hindi": "hi",
     "turkish": "tr",
     "polish": "pl",

@@ -25,6 +25,7 @@ from .models import JobStatus
 from .storage import (
     append_progress,
     input_path,
+    original_audio_path,
     output_srt_path,
     output_video_path,
     save_segments,
@@ -55,6 +56,7 @@ def _run_job(job_id: str, params: dict) -> None:
     source_language = params["source_language"]
     diarize = params["diarize"]
     subtitles = params["subtitles"]
+    voiceover = params.get("voiceover", True)
     style = resolve_style(params.get("style", "standard"))
 
     try:
@@ -100,7 +102,8 @@ def _run_job(job_id: str, params: dict) -> None:
 
             plan = prepare_merge(
                 str(src), translated, total_duration,
-                preserve_gap_audio=diarize,
+                preserve_gap_audio=diarize or voiceover,
+                original_audio_volume=1.0 if voiceover else 0.0,
             )
             gap_exc: list[Exception] = []
 
@@ -123,9 +126,11 @@ def _run_job(job_id: str, params: dict) -> None:
                 raise gap_exc[0]
 
             _progress(job_id, 5, "Building aligned video…")
+            orig_audio = str(original_audio_path(job_id)) if voiceover else None
             aligned_segments = build_aligned_video(
                 str(src), translated, tts_paths, total_duration, str(out_video),
                 merge_plan=plan,
+                original_audio_path=orig_audio,
             )
             save_segments(
                 job_id,

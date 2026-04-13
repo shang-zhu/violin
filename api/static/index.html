@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>VideoLingua</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -41,6 +42,78 @@
     }
     .check-pop { animation: check-pop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
     .upload-bar-fill { transition: width 0.3s ease; }
+    .chat-panel {
+      width: 380px;
+      max-height: 520px;
+      background: white;
+      border-radius: 1rem;
+      box-shadow: 0 20px 60px -12px rgba(0,0,0,0.2), 0 0 0 1px rgba(0,0,0,0.05);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .chat-md { font-size: 0.875rem; line-height: 1.65; }
+    .chat-md p { margin: 0 0 0.5em; }
+    .chat-md p:last-child { margin-bottom: 0; }
+    .chat-md ul, .chat-md ol { margin: 0.25em 0 0.5em 1.2em; padding: 0; }
+    .chat-md li { margin-bottom: 0.15em; }
+    .chat-md code { font-size: 0.8em; background: rgba(0,0,0,0.06); padding: 1px 4px; border-radius: 3px; }
+    .chat-md pre { margin: 0.5em 0; padding: 0.6em 0.8em; background: rgba(0,0,0,0.05); border-radius: 6px; overflow-x: auto; }
+    .chat-md pre code { background: none; padding: 0; }
+    .chat-md strong { font-weight: 600; }
+    .chat-md h1,.chat-md h2,.chat-md h3,.chat-md h4 { font-weight: 600; margin: 0.6em 0 0.3em; }
+    .chat-md h1 { font-size: 1.05em; } .chat-md h2 { font-size: 1em; } .chat-md h3,.chat-md h4 { font-size: 0.95em; }
+    .chat-md blockquote { border-left: 3px solid rgba(0,0,0,0.15); margin: 0.4em 0; padding-left: 0.7em; color: inherit; opacity: 0.85; }
+    .chat-user .chat-md code { background: rgba(255,255,255,0.2); }
+    .chat-user .chat-md pre { background: rgba(255,255,255,0.1); }
+    .chat-user .chat-md blockquote { border-left-color: rgba(255,255,255,0.4); }
+    .no-fs-btn::-webkit-media-controls-fullscreen-button { display: none; }
+    .no-fs-btn::-moz-full-screen-button { display: none; }
+    .video-wrap { position: relative; }
+    .video-wrap:fullscreen,
+    .video-wrap:-webkit-full-screen { background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .video-wrap:fullscreen video,
+    .video-wrap:-webkit-full-screen video { max-height: 100vh; max-width: 100vw; flex: 1; }
+    .video-wrap:fullscreen .sub-overlay,
+    .video-wrap:-webkit-full-screen .sub-overlay { bottom: 5%; z-index: 2147483647; }
+    .video-wrap:fullscreen .fs-btn,
+    .video-wrap:-webkit-full-screen .fs-btn { display: none; }
+    .sub-overlay {
+      position: absolute;
+      bottom: 48px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 90%;
+      text-align: center;
+      pointer-events: none;
+      z-index: 10;
+    }
+    .sub-overlay span {
+      display: inline;
+      background: rgba(0, 0, 0, 0.75);
+      color: #fff;
+      font-size: clamp(0.85rem, 2.8cqi, 1.6rem);
+      line-height: 1.7;
+      padding: 2px 10px;
+      border-radius: 4px;
+      box-decoration-break: clone;
+      -webkit-box-decoration-break: clone;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+    }
+    .fs-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 20;
+      background: rgba(0,0,0,0.5);
+      border: none;
+      border-radius: 6px;
+      padding: 6px;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .video-wrap:hover .fs-btn { opacity: 1; }
   </style>
 </head>
 <body class="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-violet-50">
@@ -65,7 +138,7 @@
   </header>
 
   <!-- Main card -->
-  <main class="mx-auto px-4 py-8 transition-all duration-300" :class="phase === 'done' ? 'max-w-6xl' : 'max-w-xl'">
+  <main class="mx-auto px-4 py-8 transition-all duration-300" :class="phase === 'done' ? 'max-w-3xl' : 'max-w-xl'">
     <div class="bg-white rounded-2xl shadow-xl shadow-indigo-100/50 border border-slate-100 overflow-hidden">
 
       <!-- ── PHASE: upload ── -->
@@ -113,8 +186,8 @@
           <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Target Language</label>
           <div class="relative">
             <select x-model="language" class="w-full appearance-none bg-slate-50 border border-slate-200 text-slate-800 rounded-lg px-4 py-3 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition">
-              <template x-for="[name] in sortedLanguages" :key="name">
-                <option :value="name" x-text="name"></option>
+              <template x-for="[name, code] in sortedLanguages" :key="name">
+                <option :value="name" x-text="nativeLabel(name, code)"></option>
               </template>
             </select>
             <div class="pointer-events-none absolute inset-y-0 right-3 flex items-center">
@@ -150,15 +223,63 @@
             />
           </div>
 
-          <!-- Custom voice -->
+          <!-- Voice description -->
           <div>
-            <label class="block text-xs font-medium text-slate-500 mb-1.5">Voice Override <span class="text-slate-300 font-normal">(leave blank for auto)</span></label>
-            <input
-              x-model="voice"
-              type="text"
-              placeholder="e.g. french narrator man"
-              class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition"
-            />
+            <label class="block text-xs font-medium text-slate-500 mb-1.5">Describe your ideal voice <span class="text-slate-300 font-normal">(leave blank for auto)</span></label>
+            <div class="flex gap-2">
+              <input
+                x-model="voiceDescription"
+                type="text"
+                placeholder="e.g. warm female narrator, deep male announcer"
+                class="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition"
+                @keydown.enter.prevent="matchVoice()"
+                @input="if (!voiceDescription.trim()) { voice = ''; voiceMatch = null; }"
+              />
+              <button
+                type="button"
+                @click="matchVoice()"
+                :disabled="!voiceDescription.trim() || voiceMatching"
+                class="px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-200 flex items-center gap-1.5 whitespace-nowrap"
+                :class="!voiceDescription.trim() || voiceMatching
+                  ? 'bg-slate-100 text-slate-300 cursor-not-allowed'
+                  : 'bg-indigo-600 hover:bg-indigo-700 text-white active:scale-[0.97]'"
+              >
+                <svg x-show="voiceMatching" class="w-3.5 h-3.5 animate-spin-slow" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                </svg>
+                <span x-text="voiceMatching ? 'Matching…' : 'Match'"></span>
+              </button>
+            </div>
+            <template x-if="voiceMatch && voiceMatch.candidates && voiceMatch.candidates.length">
+              <div class="mt-2 space-y-1.5">
+                <div class="flex items-center justify-between">
+                  <p class="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Pick a voice</p>
+                  <button type="button" @click="voice = ''; voiceMatch = null; voiceDescription = ''" class="text-[11px] text-slate-400 hover:text-slate-600 underline underline-offset-2">Clear</button>
+                </div>
+                <template x-for="(c, idx) in voiceMatch.candidates" :key="idx">
+                  <button
+                    type="button"
+                    @click="voice = c.voice"
+                    class="w-full text-left rounded-lg border px-3 py-2 transition-all duration-150"
+                    :class="voice === c.voice
+                      ? 'border-indigo-400 bg-indigo-50 ring-1 ring-indigo-300'
+                      : 'border-slate-200 bg-white hover:border-indigo-200 hover:bg-indigo-50/40'"
+                  >
+                    <div class="flex items-center gap-2">
+                      <div class="w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors"
+                        :class="voice === c.voice ? 'border-indigo-500' : 'border-slate-300'">
+                        <div class="w-2 h-2 rounded-full transition-colors" :class="voice === c.voice ? 'bg-indigo-500' : 'bg-transparent'"></div>
+                      </div>
+                      <p class="text-xs font-semibold" :class="voice === c.voice ? 'text-indigo-700' : 'text-slate-700'" x-text="c.voice"></p>
+                    </div>
+                    <p class="text-[11px] mt-0.5 ml-6" :class="voice === c.voice ? 'text-indigo-500/80' : 'text-slate-400'" x-text="c.explanation"></p>
+                  </button>
+                </template>
+              </div>
+            </template>
+            <template x-if="voiceMatchError">
+              <p class="mt-1.5 text-[11px] text-red-500" x-text="voiceMatchError"></p>
+            </template>
           </div>
 
           <!-- Toggles -->
@@ -191,6 +312,24 @@
               <span class="text-xs font-medium text-slate-600">Subtitles (.srt)</span>
             </label>
           </div>
+
+          <!-- Voice-over mode -->
+          <label class="flex items-center gap-2.5 cursor-pointer select-none">
+            <button
+              type="button"
+              class="relative w-9 h-5 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-1"
+              :class="voiceover ? 'bg-indigo-500' : 'bg-slate-200'"
+              @click="voiceover = !voiceover"
+              role="switch"
+              :aria-checked="voiceover"
+            >
+              <span class="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200" :class="voiceover ? 'translate-x-4' : 'translate-x-0'"></span>
+            </button>
+            <div>
+              <span class="text-xs font-medium text-slate-600">Voice-over mode</span>
+              <p class="text-[11px] text-slate-400 mt-0.5">Keep original audio at low volume underneath the dub</p>
+            </div>
+          </label>
         </div>
 
         <!-- Submit -->
@@ -290,155 +429,107 @@
 
       <!-- ── PHASE: done ── -->
       <div x-show="phase === 'done'" class="slide-up overflow-hidden">
-        <div class="grid lg:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.9fr)]">
-          <div class="bg-slate-950 p-5 lg:p-6">
-            <div class="bg-black rounded-2xl overflow-hidden shadow-2xl shadow-black/20">
-              <video
-                x-ref="player"
-                class="w-full aspect-video object-contain"
-                controls
-                preload="metadata"
-                @timeupdate="onVideoTimeUpdate()"
-                :src="jobId ? `/jobs/${jobId}/video` : ''"
-              ></video>
+        <div x-ref="videoWrap" class="video-wrap rounded-2xl overflow-hidden bg-black" style="container-type:inline-size">
+          <video
+            x-ref="player"
+            class="w-full block no-fs-btn"
+            controls
+            controlsList="nofullscreen"
+            preload="metadata"
+            @timeupdate="onVideoTimeUpdate()"
+            @play="syncOrigAudio('play')"
+            @pause="syncOrigAudio('pause')"
+            @seeked="syncOrigAudio('seek')"
+            @dblclick.prevent="toggleFullscreen()"
+            :src="jobId ? `/jobs/${jobId}/video` : ''"
+          ></video>
+          <div x-show="activeSubtitleText" class="sub-overlay">
+            <span x-text="activeSubtitleText"></span>
+          </div>
+          <button class="fs-btn" @click="toggleFullscreen()" title="Fullscreen">
+            <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- Hidden original audio for voice-over mixing -->
+        <audio
+          x-ref="origAudio"
+          x-show="false"
+          preload="auto"
+          :src="(jobId && voiceover && phase === 'done') ? `/jobs/${jobId}/original-audio` : ''"
+        ></audio>
+
+        <!-- Voice-over volume slider -->
+        <template x-if="voiceover && phase === 'done'">
+          <div class="px-5 pt-3 flex items-center gap-3">
+            <label class="text-xs font-medium text-slate-500 whitespace-nowrap flex items-center gap-1.5">
+              <svg class="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H2.25A.75.75 0 011.5 15V9a.75.75 0 01.75-.75h4.5z" />
+              </svg>
+              Original audio
+            </label>
+            <input
+              type="range" min="0" max="1" step="0.05"
+              x-model.number="origAudioVolume"
+              @input="if ($refs.origAudio) $refs.origAudio.volume = origAudioVolume"
+              class="flex-1 h-1.5 accent-indigo-500 cursor-pointer"
+            >
+            <span class="text-[11px] font-mono text-slate-400 w-8 text-right" x-text="Math.round(origAudioVolume * 100) + '%'"></span>
+          </div>
+        </template>
+
+        <div class="p-5 flex flex-wrap items-center gap-3">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center flex-shrink-0 check-pop">
+              <svg class="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+              </svg>
             </div>
-
-            <div class="mt-5 flex flex-wrap items-center gap-3">
-              <div class="flex items-center gap-3 min-w-0">
-                <div class="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center flex-shrink-0 check-pop">
-                  <svg class="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                  </svg>
-                </div>
-                <div>
-                  <p class="text-sm font-semibold text-white">Translation complete</p>
-                  <p class="text-xs text-slate-400">
-                    Dubbed into <span class="font-medium text-slate-200" x-text="language"></span>
-                    · now at <span class="font-mono" x-text="formatTimestamp(currentTime)"></span>
-                  </p>
-                </div>
-              </div>
-
-              <div class="flex gap-2.5 ml-auto">
-                <a
-                  :href="`/jobs/${jobId}/video`"
-                  class="flex items-center justify-center gap-2 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold text-sm shadow-md shadow-indigo-950/40 transition-all duration-200 active:scale-[0.98]"
-                  download
-                >
-                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                  </svg>
-                  Video
-                </a>
-
-                <template x-if="subtitles">
-                  <a
-                    :href="`/jobs/${jobId}/srt`"
-                    class="flex items-center justify-center gap-2 py-2.5 px-4 bg-white/10 hover:bg-white/15 text-white rounded-xl font-semibold text-sm transition-all duration-200 active:scale-[0.98]"
-                    download
-                  >
-                    <svg class="w-4 h-4 text-slate-300" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-                    </svg>
-                    Subtitles
-                  </a>
-                </template>
-              </div>
-            </div>
-
-            <div class="mt-5 rounded-2xl border border-white/10 bg-white/5 p-4">
-              <div class="flex items-center justify-between gap-3 mb-3">
-                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Nearby subtitles</p>
-                <p class="text-[11px] font-mono text-slate-500" x-text="subtitleWindowLabel"></p>
-              </div>
-              <div class="space-y-2 max-h-52 overflow-y-auto pr-1">
-                <template x-if="currentSubtitleContext.length">
-                  <template x-for="segment in currentSubtitleContext" :key="segment.id">
-                    <div class="rounded-xl border px-3 py-2 transition-colors"
-                      :class="isActiveSegment(segment) ? 'border-indigo-400/50 bg-indigo-500/10' : 'border-white/5 bg-black/10'">
-                      <div class="text-[11px] font-mono mb-1"
-                        :class="isActiveSegment(segment) ? 'text-indigo-300' : 'text-slate-500'">
-                        <span x-text="formatTimestamp(segment.start)"></span>
-                        <span> - </span>
-                        <span x-text="formatTimestamp(segment.end)"></span>
-                      </div>
-                      <p class="text-sm leading-6"
-                        :class="isActiveSegment(segment) ? 'text-white' : 'text-slate-300'"
-                        x-text="segment.text"></p>
-                    </div>
-                  </template>
-                </template>
-                <template x-if="!currentSubtitleContext.length">
-                  <p class="text-sm text-slate-500">Subtitle context will appear here when the aligned segments are available.</p>
-                </template>
-              </div>
+            <div>
+              <p class="text-sm font-semibold text-slate-800">Translation complete</p>
+              <p class="text-xs text-slate-400">
+                Dubbed into <span class="font-medium text-slate-600" x-text="language"></span>
+                · <span class="font-mono" x-text="formatTimestamp(currentTime)"></span>
+              </p>
             </div>
           </div>
 
-          <div class="bg-white p-5 lg:p-6 border-t lg:border-t-0 lg:border-l border-slate-100 flex flex-col min-h-[620px] lg:h-[calc(100vh-7rem)] lg:max-h-[860px] overflow-hidden">
-            <div class="flex items-start justify-between gap-3 mb-4">
-              <div>
-                <p class="text-sm font-semibold text-slate-800">Chat with the video</p>
-                <p class="text-xs text-slate-400">Questions are answered from the surrounding subtitles and sampled frames from the current playback window.</p>
-              </div>
-              <button
-                @click="reset()"
-                class="text-xs text-slate-400 hover:text-slate-600 underline underline-offset-2 transition-colors whitespace-nowrap"
+          <div class="flex gap-2.5 ml-auto">
+            <a
+              :href="`/jobs/${jobId}/video`"
+              class="flex items-center justify-center gap-2 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold text-sm shadow-md shadow-indigo-200 transition-all duration-200 active:scale-[0.98]"
+              download
+            >
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+              </svg>
+              Video
+            </a>
+
+            <template x-if="subtitles">
+              <a
+                :href="`/jobs/${jobId}/srt`"
+                class="flex items-center justify-center gap-2 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold text-sm transition-all duration-200 active:scale-[0.98]"
+                download
               >
-                Translate another video
-              </button>
-            </div>
-
-            <div class="flex-1 min-h-0 overflow-y-auto rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4 space-y-3">
-              <template x-for="(message, idx) in chatMessages" :key="idx">
-                <div :class="message.role === 'user' ? 'flex justify-end' : 'flex justify-start'">
-                  <div class="max-w-[88%] rounded-2xl px-4 py-3 shadow-sm"
-                    :class="message.role === 'user' ? 'bg-indigo-600 text-white rounded-br-md' : 'bg-white text-slate-700 border border-slate-100 rounded-bl-md'">
-                    <p class="text-[11px] uppercase tracking-[0.18em] mb-1 opacity-70" x-text="message.role === 'user' ? 'You' : 'Video assistant'"></p>
-                    <p class="text-sm leading-6 whitespace-pre-wrap" x-text="message.content"></p>
-                  </div>
-                </div>
-              </template>
-
-              <template x-if="chatLoading">
-                <div class="flex justify-start">
-                  <div class="max-w-[88%] rounded-2xl rounded-bl-md px-4 py-3 bg-white text-slate-700 border border-slate-100 shadow-sm">
-                    <p class="text-[11px] uppercase tracking-[0.18em] mb-1 text-slate-400">Video assistant</p>
-                    <p class="text-sm leading-6 text-slate-500">Reading the current video window…</p>
-                  </div>
-                </div>
-              </template>
-            </div>
-
-            <template x-if="chatError">
-              <div class="mt-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600" x-text="chatError"></div>
+                <svg class="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                </svg>
+                SRT
+              </a>
             </template>
 
-            <div class="mt-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
-              <div class="flex items-center justify-between gap-3 text-[11px] text-slate-400 mb-2">
-                <span>Using playback time <span class="font-mono text-slate-500" x-text="formatTimestamp(currentTime)"></span></span>
-                <span x-text="chatContextLabel"></span>
-              </div>
-              <div class="flex gap-3">
-                <textarea
-                  x-model="chatInput"
-                  rows="3"
-                  placeholder="Ask about what is happening, what was just said, or what appears on screen…"
-                  class="flex-1 resize-none bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition"
-                  @keydown.enter.exact.prevent="submitChat()"
-                ></textarea>
-                <button
-                  @click="submitChat()"
-                  :disabled="chatLoading || !chatInput.trim()"
-                  class="self-end py-3 px-5 rounded-xl font-semibold text-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2"
-                  :class="chatLoading || !chatInput.trim()
-                    ? 'bg-slate-100 text-slate-300 cursor-not-allowed'
-                    : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-200 active:scale-[0.98]'"
-                >
-                  Ask
-                </button>
-              </div>
-            </div>
+            <button
+              @click="reset()"
+              class="flex items-center justify-center gap-2 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold text-sm transition-all duration-200 active:scale-[0.98]"
+            >
+              <svg class="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+              </svg>
+              New
+            </button>
           </div>
         </div>
       </div>
@@ -480,6 +571,97 @@
 
   </main>
 
+  <!-- Floating chat bubble (done phase only) -->
+  <template x-if="phase === 'done'">
+    <div class="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
+
+      <!-- Expanded chat panel -->
+      <div
+        x-show="chatOpen"
+        x-transition:enter="transition ease-out duration-200"
+        x-transition:enter-start="opacity-0 scale-95 translate-y-4"
+        x-transition:enter-end="opacity-100 scale-100 translate-y-0"
+        x-transition:leave="transition ease-in duration-150"
+        x-transition:leave-start="opacity-100 scale-100 translate-y-0"
+        x-transition:leave-end="opacity-0 scale-95 translate-y-4"
+        class="chat-panel"
+      >
+        <div class="flex items-center justify-between px-5 py-3.5 border-b border-slate-100">
+          <div>
+            <p class="text-sm font-semibold text-slate-800">Chat with the video</p>
+            <p class="text-[11px] text-slate-400">Using subtitles + frames near <span class="font-mono text-slate-500" x-text="formatTimestamp(currentTime)"></span></p>
+          </div>
+          <button @click="chatOpen = false" class="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center transition-colors">
+            <svg class="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-3">
+          <template x-for="(message, idx) in chatMessages" :key="idx">
+            <div :class="message.role === 'user' ? 'flex justify-end' : 'flex justify-start'">
+              <div class="max-w-[88%] rounded-2xl px-4 py-3 shadow-sm"
+                :class="message.role === 'user' ? 'bg-indigo-600 text-white rounded-br-md chat-user' : 'bg-white text-slate-700 border border-slate-100 rounded-bl-md'">
+                <p class="text-[11px] uppercase tracking-[0.18em] mb-1 opacity-70" x-text="message.role === 'user' ? 'You' : 'Video assistant'"></p>
+                <div x-show="message.role === 'assistant'" class="chat-md" x-html="renderMarkdown(message.content)"></div>
+                <p x-show="message.role === 'user'" class="text-sm leading-6 whitespace-pre-wrap" x-text="message.content"></p>
+              </div>
+            </div>
+          </template>
+
+          <template x-if="chatLoading">
+            <div class="flex justify-start">
+              <div class="max-w-[88%] rounded-2xl rounded-bl-md px-4 py-3 bg-white text-slate-700 border border-slate-100 shadow-sm">
+                <p class="text-[11px] uppercase tracking-[0.18em] mb-1 text-slate-400">Video assistant</p>
+                <p class="text-sm leading-6 text-slate-500">Reading the current video window…</p>
+              </div>
+            </div>
+          </template>
+        </div>
+
+        <template x-if="chatError">
+          <div class="mx-4 mb-2 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600" x-text="chatError"></div>
+        </template>
+
+        <div class="px-4 pb-4 pt-2 border-t border-slate-100">
+          <div class="flex gap-2">
+            <textarea
+              x-model="chatInput"
+              rows="2"
+              placeholder="Ask about the video…"
+              class="flex-1 resize-none bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition"
+              @keydown.enter="if (!$event.shiftKey) { $event.preventDefault(); submitChat(); }"
+            ></textarea>
+            <button
+              @click="submitChat()"
+              :disabled="chatLoading || !chatInput.trim()"
+              class="self-end py-2.5 px-4 rounded-xl font-semibold text-sm transition-all duration-200 focus:outline-none"
+              :class="chatLoading || !chatInput.trim()
+                ? 'bg-slate-100 text-slate-300 cursor-not-allowed'
+                : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-200 active:scale-[0.98]'"
+            >
+              Ask
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bubble toggle button -->
+      <button
+        @click="chatOpen = !chatOpen"
+        class="w-14 h-14 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-300/50 flex items-center justify-center transition-all duration-200 active:scale-95"
+      >
+        <svg x-show="!chatOpen" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
+        </svg>
+        <svg x-show="chatOpen" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+  </template>
+
 </div><!-- /x-data -->
 
 <script>
@@ -490,12 +672,18 @@ function app() {
     // form
     file: null,
     dragover: false,
-    language: 'Spanish',
+    language: 'spanish',
     languages: {},
     voice: '',
+    voiceDescription: '',
+    voiceMatch: null,
+    voiceMatching: false,
+    voiceMatchError: '',
     sourceLanguage: 'auto-detect',
-    diarize: true,
+    diarize: false,
     subtitles: true,
+    voiceover: true,
+    origAudioVolume: 0.35,
     showAdvanced: false,
     uploadProgress: 0,
 
@@ -513,13 +701,14 @@ function app() {
       }
     ],
     chatInput: '',
+    chatOpen: false,
     chatLoading: false,
     chatError: '',
     chatContext: null,
 
     pipelineSteps: [
       { n: 1, label: 'Extract audio' },
-      { n: 2, label: 'Transcribe & diarize speakers' },
+      { n: 2, label: 'Transcribe speakers' },
       { n: 3, label: 'Translate segments' },
       { n: 4, label: 'Synthesize dubbed audio' },
       { n: 5, label: 'Merge video' },
@@ -537,6 +726,17 @@ function app() {
     get latestMessage() {
       if (!this.progress.length) return '';
       return this.progress[this.progress.length - 1].message;
+    },
+
+    get activeSubtitleText() {
+      if (!this.segments.length) return '';
+      const active = this.segments.find(s => this.currentTime >= s.start && this.currentTime <= s.end);
+      if (!active) return '';
+      const sentences = active.text.match(/[^.!?。！？…]+[.!?。！？…]+\s*/g);
+      if (!sentences || sentences.length <= 1) return active.text;
+      const progress = (this.currentTime - active.start) / (active.end - active.start);
+      const idx = Math.min(Math.floor(progress * sentences.length), sentences.length - 1);
+      return sentences[idx].trim();
     },
 
     get currentSubtitleContext() {
@@ -557,11 +757,36 @@ function app() {
       return `Context ${this.formatTimestamp(this.chatContext.context_start)} - ${this.formatTimestamp(this.chatContext.context_end)}`;
     },
 
+    nativeLabel(name, code) {
+      const title = name.charAt(0).toUpperCase() + name.slice(1);
+      try {
+        const dn = new Intl.DisplayNames([code], { type: 'language' });
+        const native = dn.of(code);
+        if (native && native.toLowerCase() !== name.toLowerCase()) {
+          return `${native.charAt(0).toUpperCase() + native.slice(1)} — ${title}`;
+        }
+      } catch (_) {}
+      return title;
+    },
+
     async init() {
       try {
         const res = await fetch('/languages');
         this.languages = await res.json();
+        this._autoSelectLanguage();
       } catch (_) {}
+    },
+
+    _autoSelectLanguage() {
+      const browserLang = (navigator.language || '').toLowerCase();
+      const shortCode = browserLang.split('-')[0];
+
+      for (const [name, code] of Object.entries(this.languages)) {
+        if (code === browserLang || code === shortCode) {
+          this.language = name;
+          return;
+        }
+      }
     },
 
     onDrop(e) {
@@ -577,6 +802,32 @@ function app() {
     clearFile() {
       this.file = null;
       this.$refs.fileInput.value = '';
+    },
+
+    async matchVoice() {
+      const desc = this.voiceDescription.trim();
+      if (!desc || this.voiceMatching) return;
+
+      this.voiceMatching = true;
+      this.voiceMatch = null;
+      this.voiceMatchError = '';
+
+      try {
+        const res = await fetch('/voice-match', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ description: desc, language: this.language }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+        this.voiceMatch = data;
+        this.voice = data.candidates?.[0]?.voice || '';
+      } catch (err) {
+        this.voiceMatchError = err.message || 'Voice matching failed.';
+        this.voice = '';
+      } finally {
+        this.voiceMatching = false;
+      }
     },
 
     formatSize(bytes) {
@@ -598,6 +849,7 @@ function app() {
       fd.append('source_language', this.sourceLanguage);
       fd.append('diarize', this.diarize);
       fd.append('subtitles', this.subtitles);
+      fd.append('voiceover', this.voiceover);
 
       const xhr = new XMLHttpRequest();
 
@@ -669,12 +921,48 @@ function app() {
       }
     },
 
+    toggleFullscreen() {
+      const wrap = this.$refs.videoWrap;
+      if (!wrap) return;
+      const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+      if (fsEl) {
+        (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      } else {
+        (wrap.requestFullscreen || wrap.webkitRequestFullscreen).call(wrap);
+      }
+    },
+
     onVideoTimeUpdate() {
       this.currentTime = this.$refs.player?.currentTime || 0;
     },
 
+    syncOrigAudio(event) {
+      const audio = this.$refs.origAudio;
+      const video = this.$refs.player;
+      if (!audio || !video || !this.voiceover) return;
+      audio.volume = this.origAudioVolume;
+      if (event === 'play') {
+        audio.currentTime = video.currentTime;
+        audio.play().catch(() => {});
+      } else if (event === 'pause') {
+        audio.pause();
+      } else if (event === 'seek') {
+        audio.currentTime = video.currentTime;
+        if (!video.paused) audio.play().catch(() => {});
+      }
+    },
+
     isActiveSegment(segment) {
       return this.currentTime >= segment.start && this.currentTime <= segment.end;
+    },
+
+    renderMarkdown(text) {
+      if (!text) return '';
+      try {
+        return marked.parse(text, { breaks: true });
+      } catch (_) {
+        return text.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+      }
     },
 
     formatTimestamp(seconds) {
@@ -701,6 +989,7 @@ function app() {
             question,
             current_time: this.$refs.player?.currentTime || this.currentTime || 0,
             history: this.chatMessages.slice(0, -1),
+            language: this.language,
           }),
         });
 
@@ -742,9 +1031,18 @@ function app() {
         }
       ];
       this.chatInput = '';
+      this.chatOpen = false;
       this.chatLoading = false;
       this.chatError = '';
       this.chatContext = null;
+      this.voice = '';
+      this.voiceDescription = '';
+      this.voiceMatch = null;
+      this.voiceMatching = false;
+      this.voiceMatchError = '';
+      this.voiceover = true;
+      this.origAudioVolume = 0.35;
+      if (this.$refs.origAudio) { this.$refs.origAudio.pause(); this.$refs.origAudio.removeAttribute('src'); }
       if (this.$refs.fileInput) this.$refs.fileInput.value = '';
     },
   };
