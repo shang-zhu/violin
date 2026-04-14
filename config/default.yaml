@@ -147,6 +147,11 @@ styles:
       speed: 1.0
       emotion: "neutral"
 
+# ── Transcription ────────────────────────────────────────────
+transcription:
+  chunk_seconds: 600   # split audio into chunks of this length (seconds) for Whisper
+  parallel_workers: 2  # number of parallel Whisper API calls for chunked audio
+
 # ── Segment merging (combine Whisper fragments into sentences) ──
 merge:
   max_gap: 1.0        # seconds — merge if gap between segments is smaller

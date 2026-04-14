@@ -2,6 +2,7 @@
 
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -9,10 +10,12 @@ import httpx
 from together import Together
 
 from . import config as _conf
+from .extractor import split_audio
 
 _MAX_RETRIES = 3
 _RETRY_BACKOFF = [5, 15, 30]  # seconds — generous for long diarization requests
 _TIMEOUT = 600  # 10 minutes — diarization on long audio can take a while
+_DEFAULT_TRANSCRIBE_WORKERS = 2
 
 # Whisper hallucinates these patterns on music, silence, and noise.
 _HALLUCINATION_RE = re.compile(
@@ -126,22 +129,17 @@ def _g(s: dict | object, key: str, default=None):
     return getattr(s, key, default)
 
 
-def transcribe(
+def _transcribe_single(
     audio_path: str,
     client: Together,
+    model: str,
     diarize: bool = False,
 ) -> list[Segment]:
-    """Return clean, timestamped segments from audio file.
-
-    When *diarize* is True, passes ``diarize="true"`` to Together's Whisper API
-    and labels each segment with the dominant speaker derived from the returned
-    ``speaker_segments``.
-    """
+    """Transcribe a single audio file (must be small enough for the API)."""
     extra_kwargs: dict = {}
     if diarize:
         extra_kwargs["diarize"] = "true"
 
-    model = _conf.get()["models"]["transcription"]
     response = None
     for attempt in range(_MAX_RETRIES):
         try:
@@ -198,6 +196,79 @@ def transcribe(
                     seg.speaker = max(overlap, key=overlap.get)
 
     return segments
+
+
+def _dedup_overlap(segments: list[Segment]) -> list[Segment]:
+    """Remove near-duplicate segments from chunk boundaries.
+
+    When chunks overlap, the same speech can appear at the end of one chunk
+    and the start of the next.  Drop a segment if it overlaps heavily with
+    the previous one and has similar text.
+    """
+    if len(segments) < 2:
+        return segments
+    out = [segments[0]]
+    for seg in segments[1:]:
+        prev = out[-1]
+        time_overlap = max(0, prev.end - seg.start)
+        seg_dur = seg.end - seg.start
+        if seg_dur > 0 and time_overlap / seg_dur > 0.5:
+            continue
+        out.append(seg)
+    return out
+
+
+def transcribe(
+    audio_path: str,
+    client: Together,
+    diarize: bool = False,
+) -> list[Segment]:
+    """Return clean, timestamped segments from audio file.
+
+    Long audio files are automatically split into ~10-minute chunks,
+    transcribed in parallel, and stitched back together.
+    """
+    cfg = _conf.get()
+    model = cfg["models"]["transcription"]
+    tcfg = cfg.get("transcription", {})
+    chunk_seconds = tcfg.get("chunk_seconds", 600)
+    workers = tcfg.get("parallel_workers", _DEFAULT_TRANSCRIBE_WORKERS)
+
+    chunks = split_audio(audio_path, chunk_seconds=chunk_seconds)
+
+    if len(chunks) == 1:
+        print(f"      Transcribing single file…")
+        return _transcribe_single(audio_path, client, model, diarize)
+
+    print(f"      Audio split into {len(chunks)} chunks, transcribing in parallel…")
+    results: dict[int, list[Segment]] = {}
+
+    def _do(idx: int, chunk_path: str, offset: float) -> tuple[int, list[Segment]]:
+        segs = _transcribe_single(chunk_path, client, model, diarize)
+        for s in segs:
+            s.start += offset
+            s.end += offset
+        print(f"      Chunk {idx + 1}/{len(chunks)} transcribed ({len(segs)} segments)")
+        return idx, segs
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = [pool.submit(_do, i, path, offset)
+                   for i, (path, offset) in enumerate(chunks)]
+        for f in as_completed(futures):
+            idx, segs = f.result()
+            results[idx] = segs
+
+    all_segments: list[Segment] = []
+    for i in range(len(chunks)):
+        all_segments.extend(results[i])
+
+    all_segments.sort(key=lambda s: s.start)
+    all_segments = _dedup_overlap(all_segments)
+
+    for i, seg in enumerate(all_segments):
+        seg.id = i
+
+    return all_segments
 
 
 def find_main_speaker(segments: list[Segment]) -> str:
