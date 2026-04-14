@@ -111,7 +111,7 @@ def _build_messages(
 
     lang_instruction = ""
     if language:
-        lang_instruction = f"Always reply in {language}. "
+        lang_instruction = f"You understand {language}. Reply in whatever language the user writes in. "
 
     messages: list[dict] = [
         {
