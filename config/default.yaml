@@ -10,12 +10,17 @@ models:
   tts: "cartesia/sonic-3"
   video_chat: "Qwen/Qwen3.5-397B-A17B"
 
-# ── Pricing (Together AI serverless, https://together.ai/pricing) ──
+# ── Pricing ──────────────────────────────────────────────────
 pricing:
-  whisper_per_minute: 0.0015
-  llm_per_m_input_tokens: 0.30
-  llm_per_m_output_tokens: 1.20
-  tts_per_m_characters: 65.00
+  whisper_per_minute: 0.0015          # Together AI Whisper
+  tts_per_m_characters: 65.00         # Together AI Cartesia Sonic 3
+  translation:
+    together:                          # Together AI serverless
+      per_m_input_tokens: 0.30
+      per_m_output_tokens: 1.20
+    openai:                            # OpenAI API
+      per_m_input_tokens: 0.75         # gpt-5.4-mini
+      per_m_output_tokens: 4.50
 
 # ── Translation ─────────────────────────────────────────────
 translation:
