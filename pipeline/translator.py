@@ -18,6 +18,8 @@ from . import config as _conf
 from .costs import CostTracker
 from .transcriber import Segment
 
+import prompts as _prompts
+
 
 def _tcfg() -> dict:
     return _conf.get()["translation"]
@@ -81,25 +83,18 @@ def _translate_single(
     max_retries = cfg["translation"]["max_retries"]
     temp = style_temperature if style_temperature is not None else cfg["translation"]["temperature"]
 
+    fmt = dict(
+        source_language=source_language,
+        target_language=target_language,
+        text=json.dumps(text, ensure_ascii=False),
+        style_directives=style_directives,
+    )
     if style_directives:
-        system_msg = (
-            "You are a creative translation engine. Return the result in JSON.\n\n"
-            f"STYLE INSTRUCTIONS (these take priority over everything else):\n{style_directives}"
-        )
-        user_msg = (
-            f"Translate/rewrite the following text from {source_language} to {target_language}.\n"
-            f"Follow the style instructions above — they override normal translation rules.\n"
-            f"If the text is a sentence fragment, handle it as one unit.\n\n"
-            f"Text: {json.dumps(text, ensure_ascii=False)}"
-        )
+        system_msg = _prompts.load("translate", "single_system_styled", **fmt)
+        user_msg = _prompts.load("translate", "single_user_styled", **fmt)
     else:
-        system_msg = "You are a translation API. Return the translation in JSON."
-        user_msg = (
-            f"Translate the following text from {source_language} to {target_language}.\n"
-            f"Even if the text is a sentence fragment, translate it as-is. "
-            f"Do NOT add or remove content.\n\n"
-            f"Text: {json.dumps(text, ensure_ascii=False)}"
-        )
+        system_msg = _prompts.load("translate", "single_system", **fmt)
+        user_msg = _prompts.load("translate", "single_user", **fmt)
 
     for attempt in range(1, max_retries + 1):
         try:
@@ -151,40 +146,19 @@ def _try_batch(
         f"[{i}]: {json.dumps(t, ensure_ascii=False)}" for i, t in enumerate(texts)
     )
 
+    fmt = dict(
+        source_language=source_language,
+        target_language=target_language,
+        num_segments=len(texts),
+        numbered_segments=numbered,
+        style_directives=style_directives,
+    )
     if style_directives:
-        prompt = (
-            f"Translate/rewrite each numbered segment from {source_language} to {target_language}.\n\n"
-            f"STRUCTURAL RULES (always enforced):\n"
-            f"- The \"translations\" array must contain exactly {len(texts)} strings.\n"
-            f"- Segment boundaries are FIXED. Each segment gets exactly one translation.\n"
-            f"- Never merge or split segments.\n\n"
-            f"STYLE RULES (take priority over literal translation):\n"
-            f"Follow the style instructions in the system message. You may freely rephrase,\n"
-            f"simplify, or add flair as the style demands — just keep each segment self-contained.\n\n"
-            f"Segments ({len(texts)} total):\n{numbered}"
-        )
-        system_msg = (
-            "You are a creative translation engine that preserves segment boundaries exactly. "
-            "You receive N numbered text segments and return a JSON object with a "
-            "\"translations\" array of exactly N strings. Never merge or split segments.\n\n"
-            f"STYLE INSTRUCTIONS (these take priority over literal translation):\n{style_directives}"
-        )
+        system_msg = _prompts.load("translate", "batch_system_styled", **fmt)
+        prompt = _prompts.load("translate", "batch_user_styled", **fmt)
     else:
-        prompt = (
-            f"Translate each numbered segment from {source_language} to {target_language}.\n\n"
-            f"CRITICAL RULES:\n"
-            f"- The \"translations\" array must contain exactly {len(texts)} strings.\n"
-            f"- Segment boundaries are FIXED. Each segment gets exactly one translation.\n"
-            f"- Some segments are sentence fragments — translate the fragment as-is, "
-            f"do NOT merge it with adjacent segments.\n"
-            f"- Keep technical terms, proper nouns, and numbers accurate.\n\n"
-            f"Segments ({len(texts)} total):\n{numbered}"
-        )
-        system_msg = (
-            "You are a translation API that preserves segment boundaries exactly. "
-            "You receive N numbered text segments and return a JSON object with a "
-            "\"translations\" array of exactly N strings. Never merge or split segments."
-        )
+        system_msg = _prompts.load("translate", "batch_system", **fmt)
+        prompt = _prompts.load("translate", "batch_user", **fmt)
 
     cfg = _conf.get()
     max_retries = cfg["translation"]["max_retries"]

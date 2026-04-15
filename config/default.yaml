@@ -166,6 +166,7 @@ merge_video:
   speed_clamp_max: 2.5
   crf: 23
   preset: "ultrafast"
+  voiceover_volume: 0.35  # 0.0–1.0 — original audio level for CLI voiceover mode
 
 # ── API server ──────────────────────────────────────────────
 api:

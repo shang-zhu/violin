@@ -15,6 +15,7 @@ from api.models import ChatMessage, SubtitleSegment, VideoChatResponse
 from api.storage import get_job, load_segments, output_video_path
 from pipeline import config as _conf
 from pipeline.ffmpeg_utils import FFMPEG_EXE, get_duration_video
+import prompts as _prompts
 
 load_dotenv()
 
@@ -113,40 +114,26 @@ def _build_messages(
     if language:
         lang_instruction = f"You understand {language}. Reply in whatever language the user writes in. "
 
-    messages: list[dict] = [
-        {
-            "role": "system",
-            "content": (
-                f"{lang_instruction}"
-                "You answer questions about the video currently being watched. "
-                "Use the supplied subtitle window and sampled input frames as the primary context. "
-                "When that context is missing, weak, or incomplete, you may still answer using common sense "
-                "or general knowledge, but clearly distinguish that from context-grounded observations. "
-                "Do not invent specific events, dialogue, or visuals that are not supported by the provided context."
-            ),
-        }
-    ]
+    system_content = _prompts.load("video_chat", "system", lang_instruction=lang_instruction)
+
+    messages: list[dict] = [{"role": "system", "content": system_content}]
 
     for item in history[-8:]:
         if item.role not in {"user", "assistant"}:
             continue
         messages.append({"role": item.role, "content": item.content})
 
-    user_content: list[dict] = [
-        {
-            "type": "text",
-            "text": (
-                f"Current playback time: {current_time:.2f}s.\n"
-                f"Subtitle context window: {window_start:.2f}s to {window_end:.2f}s.\n\n"
-                f"Surrounding subtitles:\n{transcript_block}\n\n"
-                f"Input image count: {len(frame_urls)}.\n"
-                "Only the sampled input frames are attached as images; no video file is attached. "
-                "If the provided subtitle or visual context does not fully answer the question, "
-                "you may give a best-effort commonsense answer and label it as an inference.\n\n"
-                f"User question: {question}"
-            ),
-        }
-    ]
+    user_text = _prompts.load(
+        "video_chat", "user",
+        current_time=f"{current_time:.2f}",
+        window_start=f"{window_start:.2f}",
+        window_end=f"{window_end:.2f}",
+        transcript_block=transcript_block,
+        num_frames=len(frame_urls),
+        question=question,
+    )
+
+    user_content: list[dict] = [{"type": "text", "text": user_text}]
     user_content.extend({"type": "image_url", "image_url": {"url": url}} for url in frame_urls)
     messages.append({"role": "user", "content": user_content})
     return messages
