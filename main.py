@@ -28,6 +28,7 @@ from together import Together
 from pipeline import config as pipeline_config
 from pipeline.costs import CostTracker
 from pipeline.languages import language_code as _language_code
+from pipeline.llm_client import make_translation_client
 from pipeline.styles import StyleProfile, list_styles, resolve as resolve_style
 from pipeline.tts import native_voices_for
 from pipeline.extractor import extract_audio, get_video_duration
@@ -73,6 +74,8 @@ def translate_video(
         raise RuntimeError("TOGETHER_API_KEY environment variable is not set.")
 
     client = Together(api_key=api_key)
+    cfg = pipeline_config.get()
+    translation_client = make_translation_client(cfg)
     tmp_dir = Path(tempfile.mkdtemp(prefix="vidtrans_"))
     tracker = CostTracker()
 
@@ -128,7 +131,7 @@ def translate_video(
 
         print(f"\n[3/5] Translating to {target_language}...")
         translated = translate_segments(
-            segments, target_language, client, source_language,
+            segments, target_language, translation_client, source_language,
             tracker=tracker, style_directives=style.translation_directives,
             style_temperature=style.temperature,
         )

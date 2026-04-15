@@ -143,7 +143,7 @@ def match_voice(payload: VoiceMatchRequest):
         },
     ]
 
-    model = cfg["models"]["translation"]
+    model = cfg["models"]["video_chat"]
 
     last_error = ""
     for attempt in range(_MAX_VOICE_MATCH_RETRIES):
