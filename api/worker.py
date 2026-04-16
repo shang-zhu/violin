@@ -104,10 +104,13 @@ def _run_job(job_id: str, params: dict) -> None:
             tts_dir = tmp_dir / "tts"
             tts_dir.mkdir()
 
+            vo_volume = pipeline_config.get()["merge_video"].get("voiceover_volume", 0.35)
+            gap_vol = min(1.0, 2 * vo_volume) if voiceover else 1.0
             plan = prepare_merge(
                 str(src), translated, total_duration,
                 preserve_gap_audio=diarize or voiceover,
                 original_audio_volume=1.0 if voiceover else 0.0,
+                gap_volume=gap_vol,
             )
             gap_exc: list[Exception] = []
 

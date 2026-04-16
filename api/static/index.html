@@ -700,7 +700,7 @@ function app() {
     diarize: false,
     subtitles: true,
     voiceover: true,
-    origAudioVolume: 0.35,
+    origAudioVolume: 0.1,
     showAdvanced: false,
     uploadProgress: 0,
 
@@ -1058,7 +1058,7 @@ function app() {
       this.voiceMatching = false;
       this.voiceMatchError = '';
       this.voiceover = true;
-      this.origAudioVolume = 0.35;
+      this.origAudioVolume = 0.1;
       if (this.$refs.origAudio) { this.$refs.origAudio.pause(); this.$refs.origAudio.removeAttribute('src'); }
       if (this.$refs.fileInput) this.$refs.fileInput.value = '';
     },

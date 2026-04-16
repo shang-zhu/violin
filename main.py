@@ -152,10 +152,12 @@ def translate_video(
             effective_voice = native_voices_for(lang_code)[gender_idx]
 
         vo_volume = pipeline_config.get()["merge_video"].get("voiceover_volume", 0.35)
+        gap_vol = min(1.0, 2 * vo_volume) if voiceover else 1.0
         plan = prepare_merge(
             input_path, translated, total_duration,
             preserve_gap_audio=diarize or voiceover,
             mix_volume=vo_volume if voiceover else 0.0,
+            gap_volume=gap_vol,
         )
         gap_exc: list[Exception] = []
 
