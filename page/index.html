@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Violin 🎻 — Video Narrator for Education</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #faf6ef;
+    --bg-soft: #f3ecdf;
+    --ink: #2a2420;
+    --ink-soft: #5c5148;
+    --ink-faint: #8a7c6f;
+    --line: #e4d9c6;
+    --accent: #8b2e2a;
+    --accent-soft: #b25e4a;
+    --gold: #b38a3e;
+    --shadow: 0 20px 60px -24px rgba(42, 36, 32, 0.25);
+    --shadow-soft: 0 8px 28px -12px rgba(42, 36, 32, 0.18);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+  }
+
+  /* Subtle paper texture overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(circle at 20% 10%, rgba(179, 138, 62, 0.04) 0%, transparent 45%),
+      radial-gradient(circle at 80% 85%, rgba(139, 46, 42, 0.04) 0%, transparent 45%);
+    z-index: 0;
+  }
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 2rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ============ NAV ============ */
+  nav {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    background: rgba(250, 246, 239, 0.82);
+    border-bottom: 1px solid var(--line);
+  }
+  nav .container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 1.1rem;
+    padding-bottom: 1.1rem;
+  }
+  .logo {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.5rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .logo-mark { font-size: 1.3rem; }
+  .nav-links {
+    display: flex;
+    gap: 2.2rem;
+    font-size: 0.88rem;
+    font-weight: 400;
+    letter-spacing: 0.04em;
+  }
+  .nav-links a {
+    color: var(--ink-soft);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+  .nav-links a:hover { color: var(--accent); }
+
+  /* ============ HERO ============ */
+  .hero {
+    padding: 7rem 0 6rem;
+    text-align: center;
+    position: relative;
+  }
+  .hero-eyebrow {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.78rem;
+    font-weight: 500;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 1.8rem;
+  }
+  .hero-eyebrow::before,
+  .hero-eyebrow::after {
+    content: '—';
+    margin: 0 0.8rem;
+    color: var(--ink-faint);
+  }
+  h1 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: clamp(3rem, 8vw, 5.8rem);
+    font-weight: 500;
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+    margin-bottom: 1.5rem;
+  }
+  h1 .title-mark {
+    display: inline-block;
+    font-size: 0.85em;
+    transform: translateY(-0.05em);
+    margin-left: 0.3em;
+    filter: drop-shadow(0 4px 12px rgba(139, 46, 42, 0.2));
+  }
+  h1 em {
+    font-style: italic;
+    color: var(--accent);
+    font-weight: 500;
+  }
+  .hero-subtitle {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: clamp(1.1rem, 2vw, 1.5rem);
+    color: var(--ink-soft);
+    margin-bottom: 2rem;
+    font-weight: 400;
+  }
+  .hero-desc {
+    max-width: 620px;
+    margin: 0 auto 2.8rem;
+    font-size: 1.02rem;
+    color: var(--ink-soft);
+    line-height: 1.75;
+  }
+  .hero-cta {
+    display: inline-flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.95rem 1.8rem;
+    border-radius: 999px;
+    font-size: 0.88rem;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    text-decoration: none;
+    transition: all 0.25s ease;
+    border: 1px solid transparent;
+  }
+  .btn-primary {
+    background: var(--ink);
+    color: var(--bg);
+  }
+  .btn-primary:hover {
+    background: var(--accent);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-soft);
+  }
+  .btn-ghost {
+    background: transparent;
+    color: var(--ink);
+    border-color: var(--line);
+  }
+  .btn-ghost:hover {
+    border-color: var(--ink);
+    background: var(--bg-soft);
+  }
+
+  /* Decorative violin line */
+  .divider {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1.2rem;
+    margin: 5rem 0;
+    color: var(--ink-faint);
+  }
+  .divider::before,
+  .divider::after {
+    content: '';
+    height: 1px;
+    width: 100px;
+    background: linear-gradient(90deg, transparent, var(--line), transparent);
+  }
+  .divider-mark {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: 1.1rem;
+  }
+
+  /* ============ FEATURES ============ */
+  .features {
+    padding: 2rem 0 5rem;
+  }
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 2.5rem;
+  }
+  .feature {
+    text-align: center;
+    padding: 1.5rem 1rem;
+  }
+  .feature-num {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: 1.6rem;
+    color: var(--gold);
+    margin-bottom: 0.8rem;
+  }
+  .feature h3 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-bottom: 0.6rem;
+    letter-spacing: -0.005em;
+  }
+  .feature p {
+    font-size: 0.94rem;
+    color: var(--ink-soft);
+    line-height: 1.7;
+  }
+
+  /* ============ GALLERY ============ */
+  .gallery {
+    padding: 5rem 0 6rem;
+  }
+  .section-head {
+    text-align: center;
+    margin-bottom: 4rem;
+  }
+  .section-head .eyebrow {
+    font-size: 0.76rem;
+    font-weight: 500;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 1rem;
+    display: block;
+  }
+  .section-head h2 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: clamp(2.2rem, 5vw, 3.4rem);
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    margin-bottom: 1rem;
+    line-height: 1.1;
+  }
+  .section-head h2 em {
+    font-style: italic;
+    color: var(--accent);
+  }
+  .section-head p {
+    max-width: 580px;
+    margin: 0 auto;
+    color: var(--ink-soft);
+    font-size: 1rem;
+  }
+
+  .gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    gap: 2.5rem;
+  }
+
+  .card {
+    background: #fffdf8;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: var(--shadow-soft);
+    transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.4s;
+    border: 1px solid rgba(228, 217, 198, 0.6);
+    display: flex;
+    flex-direction: column;
+  }
+  .card:hover {
+    transform: translateY(-6px);
+    box-shadow: var(--shadow);
+  }
+  .video-wrap {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    background: #1a1612;
+    overflow: hidden;
+  }
+  .video-wrap video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .lang-tag {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: rgba(26, 22, 18, 0.7);
+    color: #f3ecdf;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    padding: 0.35rem 0.85rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    z-index: 2;
+    pointer-events: none;
+  }
+  .card-body {
+    padding: 1.6rem 1.7rem 1.8rem;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+  .card-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 0.8rem;
+    font-weight: 500;
+  }
+  .card-meta .dot {
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: var(--ink-faint);
+  }
+  .card-meta .translation {
+    color: var(--accent);
+  }
+  .card h3 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.55rem;
+    font-weight: 600;
+    line-height: 1.25;
+    margin-bottom: 0.7rem;
+    letter-spacing: -0.005em;
+  }
+  .card p {
+    color: var(--ink-soft);
+    font-size: 0.92rem;
+    line-height: 1.65;
+    margin-bottom: 1.2rem;
+    flex: 1;
+  }
+  .card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 1rem;
+    border-top: 1px solid var(--line);
+    font-size: 0.78rem;
+    color: var(--ink-faint);
+  }
+  .card-footer .source {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: 0.95rem;
+    color: var(--ink-soft);
+  }
+  .card-footer .arrow {
+    font-family: 'Cormorant Garamond', serif;
+    color: var(--accent);
+    font-size: 1rem;
+  }
+
+  /* ============ FOOTER ============ */
+  footer {
+    border-top: 1px solid var(--line);
+    padding: 4rem 0 3rem;
+    margin-top: 4rem;
+    text-align: center;
+  }
+  .footer-mark {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.8rem;
+    font-style: italic;
+    color: var(--accent);
+    margin-bottom: 1rem;
+  }
+  .footer-text {
+    color: var(--ink-faint);
+    font-size: 0.86rem;
+    letter-spacing: 0.04em;
+    margin-bottom: 1rem;
+  }
+  .footer-links {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    font-size: 0.82rem;
+  }
+  .footer-links a {
+    color: var(--ink-soft);
+    text-decoration: none;
+    letter-spacing: 0.04em;
+    transition: color 0.2s;
+  }
+  .footer-links a:hover { color: var(--accent); }
+
+  /* ============ REVEAL ============ */
+  .reveal {
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 0.9s ease, transform 0.9s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .reveal.visible {
+    opacity: 1;
+    transform: none;
+  }
+
+  @media (max-width: 640px) {
+    .container { padding: 0 1.4rem; }
+    .hero { padding: 4.5rem 0 3.5rem; }
+    .nav-links { display: none; }
+    .gallery-grid { grid-template-columns: 1fr; gap: 1.8rem; }
+    .divider { margin: 3rem 0; }
+    .divider::before, .divider::after { width: 40px; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="container">
+    <div class="logo">
+      <span class="logo-mark">🎻</span>
+      <span>Violin</span>
+    </div>
+    <div class="nav-links">
+      <a href="#gallery">Gallery</a>
+      <a href="#features">Features</a>
+      <a href="https://github.com/shang-zhu/VideoLingua" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="container">
+    <div class="hero-eyebrow">Video Narrator for Education</div>
+    <h1>
+      Violin<span class="title-mark">🎻</span><br />
+      <em>narrates</em> every lecture
+    </h1>
+    <p class="hero-subtitle">— let knowledge cross every language —</p>
+    <p class="hero-desc">
+      Violin translates educational videos with native-voice dubbing and aligned subtitles,
+      so a lecture in English can be heard in Chinese, a history lesson in Mandarin can be
+      watched in Spanish. Learning without borders, preserved in its own voice.
+    </p>
+    <div class="hero-cta">
+      <a href="#gallery" class="btn btn-primary">View the Gallery</a>
+      <a href="https://github.com/shang-zhu/VideoLingua" target="_blank" rel="noopener" class="btn btn-ghost">Source on GitHub →</a>
+    </div>
+  </div>
+</header>
+
+<div class="divider">
+  <span class="divider-mark">✦</span>
+</div>
+
+<section class="features" id="features">
+  <div class="container">
+    <div class="features-grid">
+      <div class="feature reveal">
+        <div class="feature-num">I.</div>
+        <h3>Native Voices</h3>
+        <p>Language-matched voices — a Korean narrator for Korean, a French narrator for French — no flat machine tone.</p>
+      </div>
+      <div class="feature reveal">
+        <div class="feature-num">II.</div>
+        <h3>Aligned Subtitles</h3>
+        <p>Every video ships with a timestamped SRT, so learners can read along, pause, and revisit any passage.</p>
+      </div>
+      <div class="feature reveal">
+        <div class="feature-num">III.</div>
+        <h3>Speaker Diarization</h3>
+        <p>Multiple speakers in one lecture each receive a distinct, consistent voice throughout the translation.</p>
+      </div>
+      <div class="feature reveal">
+        <div class="feature-num">IV.</div>
+        <h3>42 Languages</h3>
+        <p>From Mandarin to Swahili — a single pipeline spanning forty-two languages, powered by Cartesia Sonic 3.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider">
+  <span class="divider-mark">✦ ✦ ✦</span>
+</div>
+
+<section class="gallery" id="gallery">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">The Gallery</span>
+      <h2>Lectures, <em>reborn</em> in another tongue</h2>
+      <p>A curated selection of educational videos Violin has translated — original lectures paired with their dubbed counterparts, preserved in rhythm, tone, and meaning.</p>
+    </div>
+
+    <div class="gallery-grid">
+
+      <!-- Card 1: Andrej Karpathy — Intro to LLMs (EN → Slovak) -->
+      <div class="card reveal">
+        <div class="video-wrap">
+          <span class="lang-tag">Slovenčina · Slovak</span>
+          <video controls preload="metadata">
+            <source src="andrej-gpt_sk.mp4" type="video/mp4" />
+            <track kind="subtitles" src="andrej-gpt_sk.srt" srclang="sk" label="Slovenčina" default />
+          </video>
+        </div>
+        <div class="card-body">
+          <div class="card-meta">
+            <span>Computer Science</span>
+            <span class="dot"></span>
+            <span class="translation">EN → SK</span>
+          </div>
+          <h3>Intro to Large Language Models</h3>
+          <p>Andrej Karpathy's landmark walkthrough of ChatGPT and the transformer architecture — dubbed into Slovak for Central European classrooms.</p>
+          <div class="card-footer">
+            <span class="source">Andrej Karpathy</span>
+            <span class="arrow">↗</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 2: Fei-Fei Li — Visual Intelligence (EN → Dutch) -->
+      <div class="card reveal">
+        <div class="video-wrap">
+          <span class="lang-tag">Nederlands · Dutch</span>
+          <video controls preload="metadata">
+            <source src="feifei_vision_nl.mp4" type="video/mp4" />
+            <track kind="subtitles" src="feifei_vision_nl.srt" srclang="nl" label="Nederlands" default />
+          </video>
+        </div>
+        <div class="card-body">
+          <div class="card-meta">
+            <span>Computer Vision</span>
+            <span class="dot"></span>
+            <span class="translation">EN → NL</span>
+          </div>
+          <h3>From Seeing to Doing — Visual Intelligence</h3>
+          <p>Fei-Fei Li's NeurIPS keynote tracing visual intelligence from the first light-sensitive cells 540 million years ago to modern computer vision — narrated in Dutch.</p>
+          <div class="card-footer">
+            <span class="source">Fei-Fei Li</span>
+            <span class="arrow">↗</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 3: Andrew Ng — AI Opportunities (EN → Spanish) -->
+      <div class="card reveal">
+        <div class="video-wrap">
+          <span class="lang-tag">Español · Spanish</span>
+          <video controls preload="metadata">
+            <source src="andrew_ai_es.mp4" type="video/mp4" />
+            <track kind="subtitles" src="andrew_ai_es.srt" srclang="es" label="Español" default />
+          </video>
+        </div>
+        <div class="card-body">
+          <div class="card-meta">
+            <span>Artificial Intelligence</span>
+            <span class="dot"></span>
+            <span class="translation">EN → ES</span>
+          </div>
+          <h3>AI Is the New Electricity</h3>
+          <p>Andrew Ng's Stanford talk on the landscape of AI opportunities — from supervised learning to generative AI — now in Spanish for Latin America's growing tech community.</p>
+          <div class="card-footer">
+            <span class="source">Andrew Ng</span>
+            <span class="arrow">↗</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 4: 3Blue1Brown — Neural Networks (EN → Portuguese) -->
+      <div class="card reveal">
+        <div class="video-wrap">
+          <span class="lang-tag">Português · Portuguese</span>
+          <video controls preload="metadata">
+            <source src="3b1b_nn_pt.mp4" type="video/mp4" />
+            <track kind="subtitles" src="3b1b_nn_pt.srt" srclang="pt" label="Português" default />
+          </video>
+        </div>
+        <div class="card-body">
+          <div class="card-meta">
+            <span>Mathematics</span>
+            <span class="dot"></span>
+            <span class="translation">EN → PT</span>
+          </div>
+          <h3>But What Is a Neural Network?</h3>
+          <p>Grant Sanderson's iconic visual explainer on neural networks and handwritten digit recognition — dubbed into Portuguese for the Lusophone world.</p>
+          <div class="card-footer">
+            <span class="source">3Blue1Brown</span>
+            <span class="arrow">↗</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 5: Hung-yi Lee — Harness Engineering (ZH → English) -->
+      <div class="card reveal">
+        <div class="video-wrap">
+          <span class="lang-tag">English</span>
+          <video controls preload="metadata">
+            <source src="hongyi_harness_en.mp4" type="video/mp4" />
+            <track kind="subtitles" src="hongyi_harness_en.srt" srclang="en" label="English" default />
+          </video>
+        </div>
+        <div class="card-body">
+          <div class="card-meta">
+            <span>Machine Learning</span>
+            <span class="dot"></span>
+            <span class="translation">ZH → EN</span>
+          </div>
+          <h3>Harness Engineering for LLMs</h3>
+          <p>Hung-yi Lee's popular lecture on guiding small language models with smart prompting — translated from Mandarin to English for a global audience.</p>
+          <div class="card-footer">
+            <span class="source">Hung-yi Lee (李宏毅)</span>
+            <span class="arrow">↗</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 6: Percy Liang — CS336 (EN → Korean) -->
+      <div class="card reveal">
+        <div class="video-wrap">
+          <span class="lang-tag">한국어 · Korean</span>
+          <video controls preload="metadata">
+            <source src="percy_cs336_ko.mp4" type="video/mp4" />
+            <track kind="subtitles" src="percy_cs336_ko.srt" srclang="ko" label="한국어" default />
+          </video>
+        </div>
+        <div class="card-body">
+          <div class="card-meta">
+            <span>NLP / Systems</span>
+            <span class="dot"></span>
+            <span class="translation">EN → KO</span>
+          </div>
+          <h3>CS336 — Language Modeling from Scratch</h3>
+          <p>Stanford's CS336 — building language models end-to-end, from data pipelines to training — dubbed into Korean for East Asian ML students.</p>
+          <div class="card-footer">
+            <span class="source">Percy Liang</span>
+            <span class="arrow">↗</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 7: James Zou — AI Agents for Science (EN → Chinese) -->
+      <div class="card reveal">
+        <div class="video-wrap">
+          <span class="lang-tag">中文 · Chinese</span>
+          <video controls preload="metadata">
+            <source src="james_agents_zh.mp4" type="video/mp4" />
+            <track kind="subtitles" src="james_agents_zh.srt" srclang="zh" label="中文" default />
+          </video>
+        </div>
+        <div class="card-body">
+          <div class="card-meta">
+            <span>Biomedical AI</span>
+            <span class="dot"></span>
+            <span class="translation">EN → ZH</span>
+          </div>
+          <h3>AI Agents for Scientific Discovery</h3>
+          <p>James Zou's talk on building AI agents to automate and accelerate biomedical research — from protein prediction to literature mining — dubbed into Mandarin.</p>
+          <div class="card-footer">
+            <span class="source">James Zou</span>
+            <span class="arrow">↗</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 8: Mike Shou — Video Diffusion Models (EN → Hindi) -->
+      <div class="card reveal">
+        <div class="video-wrap">
+          <span class="lang-tag">हिन्दी · Hindi</span>
+          <video controls preload="metadata">
+            <source src="mike_video_diffusion_hi.mp4" type="video/mp4" />
+            <track kind="subtitles" src="mike_video_diffusion_hi.srt" srclang="hi" label="हिन्दी" default />
+          </video>
+        </div>
+        <div class="card-body">
+          <div class="card-meta">
+            <span>Generative AI</span>
+            <span class="dot"></span>
+            <span class="translation">EN → HI</span>
+          </div>
+          <h3>Video Diffusion Models — A Tutorial</h3>
+          <p>Mike Shou's comprehensive NUS tutorial on video generation and editing with diffusion models — now accessible in Hindi for South Asian researchers.</p>
+          <div class="card-footer">
+            <span class="source">Mike Shou</span>
+            <span class="arrow">↗</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 9: Philip Torr — The Future of Agentic AI (EN → Italian) -->
+      <div class="card reveal">
+        <div class="video-wrap">
+          <span class="lang-tag">Italiano · Italian</span>
+          <video controls preload="metadata">
+            <source src="philip_ai4p_it.mp4" type="video/mp4" />
+            <track kind="subtitles" src="philip_ai4p_it.srt" srclang="it" label="Italiano" default />
+          </video>
+        </div>
+        <div class="card-body">
+          <div class="card-meta">
+            <span>AI &amp; Society</span>
+            <span class="dot"></span>
+            <span class="translation">EN → IT</span>
+          </div>
+          <h3>The Future of Agentic AI</h3>
+          <p>Oxford's Philip Torr reflects on the rapid rise of agentic AI and what the next century could hold — narrated in Italian for European audiences.</p>
+          <div class="card-footer">
+            <span class="source">Philip Torr</span>
+            <span class="arrow">↗</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <div class="footer-mark">🎻</div>
+    <p class="footer-text">Violin · a video narrator for a world that learns in many voices</p>
+    <div class="footer-links">
+      <a href="https://github.com/shang-zhu/VideoLingua" target="_blank" rel="noopener">GitHub</a>
+      <a href="#gallery">Gallery</a>
+      <a href="#features">Features</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+
+  document.querySelectorAll('.reveal').forEach((el) => observer.observe(el));
+
+  // Stagger card reveals
+  document.querySelectorAll('.gallery-grid .card').forEach((card, i) => {
+    card.style.transitionDelay = (i * 90) + 'ms';
+  });
+  document.querySelectorAll('.features-grid .feature').forEach((el, i) => {
+    el.style.transitionDelay = (i * 100) + 'ms';
+  });
+</script>
+
+</body>
+</html>
