@@ -83,7 +83,7 @@ def _make_speech_chunk(
         filter_complex = (
             f"[0:v]trim=start={fine}:duration={orig_dur},setpts=(PTS-STARTPTS)/{speed},fps=fps={fps}[v];"
             f"[0:a]atrim=start={fine}:duration={orig_dur},asetpts=PTS-STARTPTS"
-            f"{atempo_part},volume={vol}[orig];"
+            f"{atempo_part},loudnorm=I=-23:TP=-1.5:LRA=11,volume={vol}[orig];"
             f"[1:a:0]apad[tts];"
             f"[orig][tts]amix=inputs=2:duration=shortest[a]"
         )
