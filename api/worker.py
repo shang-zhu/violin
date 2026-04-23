@@ -25,6 +25,7 @@ from pipeline.tts import native_voices_for, synthesize_segments
 from .config import MAX_WORKERS
 from .models import JobStatus
 from .storage import (
+    _read_meta,
     append_progress,
     input_path,
     original_audio_path,
@@ -39,6 +40,20 @@ load_dotenv()
 _executor = ThreadPoolExecutor(max_workers=MAX_WORKERS)
 
 TOTAL_STEPS = 5
+
+
+class _Cancelled(Exception):
+    pass
+
+
+def _check_cancelled(job_id: str) -> None:
+    """Raise _Cancelled if the job has been cancelled by the user."""
+    try:
+        meta = _read_meta(job_id)
+        if meta.get("status") in (JobStatus.cancelled, "cancelled"):
+            raise _Cancelled()
+    except (OSError, ValueError):
+        pass
 
 
 def _progress(job_id: str, step: int, message: str) -> None:
@@ -71,10 +86,12 @@ def _run_job(job_id: str, params: dict, api_key_override: str | None = None) -> 
         tmp_dir = Path(tempfile.mkdtemp(prefix=f"vidtrans_{job_id}_"))
 
         try:
+            _check_cancelled(job_id)
             _progress(job_id, 1, "Extracting audio…")
             audio_path = extract_audio(str(src), str(tmp_dir / "audio.wav"))
             total_duration = get_video_duration(str(src))
 
+            _check_cancelled(job_id)
             _progress(job_id, 2, f"Transcribing with Whisper Large v3… (video duration: {total_duration:.0f}s)")
             segments = transcribe(audio_path, client)
 
@@ -82,6 +99,7 @@ def _run_job(job_id: str, params: dict, api_key_override: str | None = None) -> 
 
             segments = merge_continuous_segments(segments)
 
+            _check_cancelled(job_id)
             _progress(job_id, 3, f"Translating {len(segments)} segments to {target_language} "
                        f"(style: {style.name})…")
             translated = translate_segments(
@@ -91,6 +109,7 @@ def _run_job(job_id: str, params: dict, api_key_override: str | None = None) -> 
             )
             translated = merge_continuous_segments(translated)
 
+            _check_cancelled(job_id)
             effective_voice = voice or native_voices_for(lang_code)[0]
             _progress(job_id, 4, f"Synthesizing TTS with Cartesia Sonic 3 (voice: {effective_voice})…")
             tts_dir = tmp_dir / "tts"
@@ -124,6 +143,7 @@ def _run_job(job_id: str, params: dict, api_key_override: str | None = None) -> 
             if gap_exc:
                 raise gap_exc[0]
 
+            _check_cancelled(job_id)
             _progress(job_id, 5, "Building aligned video…")
             orig_audio = str(original_audio_path(job_id)) if voiceover else None
             aligned_segments = build_aligned_video(
@@ -153,6 +173,8 @@ def _run_job(job_id: str, params: dict, api_key_override: str | None = None) -> 
 
         update_status(job_id, JobStatus.done)
 
+    except _Cancelled:
+        pass
     except Exception as exc:
         update_status(job_id, JobStatus.failed, str(exc))
 

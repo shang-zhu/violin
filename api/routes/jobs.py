@@ -154,6 +154,19 @@ def get_job_status(job_id: str):
     return job
 
 
+@router.post("/{job_id}/cancel")
+def cancel_translation_job(job_id: str):
+    """Cancel a running job."""
+    from api.storage import update_status
+    job = get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found.")
+    if job.status not in (JobStatus.queued, JobStatus.running):
+        raise HTTPException(status_code=409, detail=f"Job is already {job.status.value}.")
+    update_status(job_id, JobStatus.cancelled)
+    return {"status": "cancelled"}
+
+
 @router.delete("/{job_id}", status_code=204)
 def delete_translation_job(job_id: str):
     """Delete a job and all its associated files."""
