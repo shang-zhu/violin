@@ -166,8 +166,33 @@
       <!-- ── PHASE: upload ── -->
       <div x-show="phase === 'upload'" class="p-8 slide-up">
 
-        <!-- Drop zone -->
+        <!-- Source tabs: Upload / URL -->
+        <div class="flex rounded-lg bg-cream-200/60 p-1 mb-5">
+          <button
+            @click="inputMode = 'file'; videoUrl = ''"
+            class="flex-1 py-2 px-4 rounded-md text-xs font-semibold transition-all duration-200 flex items-center justify-center gap-1.5"
+            :class="inputMode === 'file' ? 'bg-cream-50 text-ink-800 shadow-sm' : 'text-ink-400 hover:text-ink-600'"
+          >
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+            </svg>
+            Upload file
+          </button>
+          <button
+            @click="inputMode = 'url'; clearFile()"
+            class="flex-1 py-2 px-4 rounded-md text-xs font-semibold transition-all duration-200 flex items-center justify-center gap-1.5"
+            :class="inputMode === 'url' ? 'bg-cream-50 text-ink-800 shadow-sm' : 'text-ink-400 hover:text-ink-600'"
+          >
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m9.86-4.122a4.5 4.5 0 00-1.242-7.244l-4.5-4.5a4.5 4.5 0 00-6.364 6.364L4.34 8.374" />
+            </svg>
+            Paste URL
+          </button>
+        </div>
+
+        <!-- File drop zone -->
         <div
+          x-show="inputMode === 'file'"
           class="border-2 border-dashed border-cream-300 rounded-xl p-8 text-center cursor-pointer transition-all duration-200 hover:border-gold-300 hover:bg-gold-50/40 mb-6"
           :class="{ 'drop-zone-active': dragover }"
           @dragover.prevent="dragover = true"
@@ -201,6 +226,24 @@
               <button class="mt-3 text-xs text-accent-400 hover:text-accent-500 underline underline-offset-2" @click.stop="clearFile()">change file</button>
             </div>
           </template>
+        </div>
+
+        <!-- URL input -->
+        <div x-show="inputMode === 'url'" class="mb-6">
+          <div class="border-2 border-dashed border-cream-300 rounded-xl p-6 transition-all duration-200" :class="videoUrl.trim() ? 'border-gold-300 bg-gold-50/30' : ''">
+            <div class="w-14 h-14 rounded-2xl bg-cream-100 border border-cream-300 flex items-center justify-center mx-auto mb-4" :class="videoUrl.trim() ? 'bg-gold-50 border-gold-200' : ''">
+              <svg class="w-7 h-7" :class="videoUrl.trim() ? 'text-gold-400' : 'text-ink-400'" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m9.86-4.122a4.5 4.5 0 00-1.242-7.244l-4.5-4.5a4.5 4.5 0 00-6.364 6.364L4.34 8.374" />
+              </svg>
+            </div>
+            <input
+              x-model="videoUrl"
+              type="url"
+              placeholder="https://www.youtube.com/watch?v=..."
+              class="w-full bg-cream-50 border border-cream-300 rounded-lg px-4 py-3 text-sm text-ink-800 placeholder-ink-300 focus:outline-none focus:ring-2 focus:ring-gold-300 focus:border-transparent transition text-center"
+            />
+            <p class="text-xs text-ink-400 mt-2">YouTube, Vimeo, X/Twitter, and <a href="https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md" target="_blank" class="underline underline-offset-2 hover:text-ink-600">1000+ sites</a> · max 2 hours</p>
+          </div>
         </div>
 
         <!-- Language select -->
@@ -373,9 +416,9 @@
         <!-- Submit -->
         <button
           @click="submit()"
-          :disabled="!file || (needsKey && !userApiKey.trim())"
+          :disabled="(!file && !videoUrl.trim()) || (needsKey && !userApiKey.trim()) || (inputMode === 'file' && !file) || (inputMode === 'url' && !videoUrl.trim())"
           class="w-full py-3.5 px-6 rounded-full font-semibold text-sm tracking-wide transition-all duration-250 focus:outline-none focus:ring-2 focus:ring-gold-300 focus:ring-offset-2"
-          :class="file && !(needsKey && !userApiKey.trim())
+          :class="((inputMode === 'file' && file) || (inputMode === 'url' && videoUrl.trim())) && !(needsKey && !userApiKey.trim())
             ? 'bg-ink-800 hover:bg-accent-500 text-cream-100 shadow-[0_8px_28px_-12px_rgba(42,36,32,0.3)] hover:shadow-[0_8px_28px_-12px_rgba(139,46,42,0.3)] active:scale-[0.98]'
             : 'bg-cream-200 text-ink-300 cursor-not-allowed'"
         >
@@ -749,6 +792,10 @@ function app() {
     showAdvanced: false,
     uploadProgress: 0,
 
+    // input mode
+    inputMode: 'file',
+    videoUrl: '',
+
     // API key / trial
     userApiKey: localStorage.getItem('violin_api_key') || '',
     trialUsed: localStorage.getItem('violin_trial_used') === 'true',
@@ -955,9 +1002,49 @@ function app() {
     },
 
     submit() {
-      if (!this.file) return;
       if (this.needsKey && !this.userApiKey.trim()) return;
 
+      if (this.inputMode === 'url') {
+        if (!this.videoUrl.trim()) return;
+        this._submitUrl();
+      } else {
+        if (!this.file) return;
+        this._submitFile();
+      }
+    },
+
+    _onJobCreated(job, usingOwnKey) {
+      this.jobId = job.id;
+      localStorage.setItem('violin_job_id', job.id);
+      localStorage.setItem('violin_job_lang', this.language);
+      this.phase = 'processing';
+      if (!usingOwnKey) {
+        this.trialUsed = true;
+        this.needsKey = true;
+        this.trialRemaining = 0;
+        localStorage.setItem('violin_trial_used', 'true');
+      }
+      this.poll();
+    },
+
+    _onJobError(status, responseText) {
+      if (status === 403) {
+        this.needsKey = true;
+        this.trialUsed = true;
+        this.trialRemaining = 0;
+        localStorage.setItem('violin_trial_used', 'true');
+        let detail = 'Free trial used. Please provide your own Together API key to continue.';
+        try { detail = JSON.parse(responseText).detail || detail; } catch (_) {}
+        this.errorMessage = detail;
+      } else {
+        let detail = `HTTP ${status}`;
+        try { detail = JSON.parse(responseText).detail || detail; } catch (_) {}
+        this.errorMessage = detail;
+      }
+      this.phase = 'error';
+    },
+
+    _submitFile() {
       this.phase = 'uploading';
       this.uploadProgress = 0;
       this.progress = [];
@@ -973,7 +1060,6 @@ function app() {
       fd.append('user_api_key', this.userApiKey.trim());
 
       const usingOwnKey = !!this.userApiKey.trim();
-
       const xhr = new XMLHttpRequest();
 
       xhr.upload.addEventListener('progress', e => {
@@ -984,32 +1070,9 @@ function app() {
 
       xhr.onload = () => {
         if (xhr.status === 202) {
-          const job = JSON.parse(xhr.responseText);
-          this.jobId = job.id;
-          localStorage.setItem('violin_job_id', job.id);
-          localStorage.setItem('violin_job_lang', this.language);
-          this.phase = 'processing';
-          if (!usingOwnKey) {
-            this.trialUsed = true;
-            this.needsKey = true;
-            this.trialRemaining = 0;
-            localStorage.setItem('violin_trial_used', 'true');
-          }
-          this.poll();
-        } else if (xhr.status === 403) {
-          this.needsKey = true;
-          this.trialUsed = true;
-          this.trialRemaining = 0;
-          localStorage.setItem('violin_trial_used', 'true');
-          let detail = 'Free trial used. Please provide your own Together API key to continue.';
-          try { detail = JSON.parse(xhr.responseText).detail || detail; } catch (_) {}
-          this.errorMessage = detail;
-          this.phase = 'error';
+          this._onJobCreated(JSON.parse(xhr.responseText), usingOwnKey);
         } else {
-          let detail = `HTTP ${xhr.status}`;
-          try { detail = JSON.parse(xhr.responseText).detail || detail; } catch (_) {}
-          this.errorMessage = detail;
-          this.phase = 'error';
+          this._onJobError(xhr.status, xhr.responseText);
         }
       };
 
@@ -1020,6 +1083,40 @@ function app() {
 
       xhr.open('POST', '/jobs');
       xhr.send(fd);
+    },
+
+    async _submitUrl() {
+      this.phase = 'processing';
+      this.progress = [];
+      this.errorMessage = '';
+
+      const usingOwnKey = !!this.userApiKey.trim();
+
+      try {
+        const res = await fetch('/jobs/from-url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url: this.videoUrl.trim(),
+            language: this.language,
+            voice: this.voice,
+            source_language: this.sourceLanguage,
+            subtitles: this.subtitles,
+            style: 'standard',
+            voiceover: this.voiceover,
+            user_api_key: this.userApiKey.trim(),
+          }),
+        });
+
+        if (res.status === 202) {
+          this._onJobCreated(await res.json(), usingOwnKey);
+        } else {
+          this._onJobError(res.status, await res.text());
+        }
+      } catch (_) {
+        this.errorMessage = 'Network error — could not reach the server.';
+        this.phase = 'error';
+      }
     },
 
     async poll() {
@@ -1158,6 +1255,8 @@ function app() {
       this._clearSavedJob();
       this.phase = 'upload';
       this.file = null;
+      this.videoUrl = '';
+      this.inputMode = 'file';
       this.jobId = null;
       this.progress = [];
       this.jobStatus = null;
