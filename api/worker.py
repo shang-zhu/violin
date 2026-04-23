@@ -12,8 +12,10 @@ from pathlib import Path
 from dotenv import load_dotenv
 from together import Together
 
+from pipeline import config as pipeline_config
 from pipeline.extractor import extract_audio, get_video_duration
 from pipeline.languages import language_code
+from pipeline.llm_client import make_translation_client
 from pipeline.merger import build_aligned_video, build_gap_chunks, generate_srt, prepare_merge
 from pipeline.styles import resolve as resolve_style
 from pipeline.transcriber import find_main_speaker, merge_continuous_segments, transcribe
@@ -65,6 +67,8 @@ def _run_job(job_id: str, params: dict) -> None:
         out_srt = output_srt_path(job_id)
 
         client = Together(api_key=api_key)
+        cfg = pipeline_config.get()
+        translation_client = make_translation_client(cfg)
         tmp_dir = Path(tempfile.mkdtemp(prefix=f"vidtrans_{job_id}_"))
 
         try:
@@ -89,7 +93,7 @@ def _run_job(job_id: str, params: dict) -> None:
             _progress(job_id, 3, f"Translating {len(segments)} segments to {target_language} "
                        f"(style: {style.name})…")
             translated = translate_segments(
-                segments, target_language, client, source_language,
+                segments, target_language, translation_client, source_language,
                 style_directives=style.translation_directives,
                 style_temperature=style.temperature,
             )
@@ -100,10 +104,13 @@ def _run_job(job_id: str, params: dict) -> None:
             tts_dir = tmp_dir / "tts"
             tts_dir.mkdir()
 
+            vo_volume = pipeline_config.get()["merge_video"].get("voiceover_volume", 0.35)
+            gap_vol = min(1.0, 2 * vo_volume) if voiceover else 1.0
             plan = prepare_merge(
                 str(src), translated, total_duration,
                 preserve_gap_audio=diarize or voiceover,
                 original_audio_volume=1.0 if voiceover else 0.0,
+                gap_volume=gap_vol,
             )
             gap_exc: list[Exception] = []
 

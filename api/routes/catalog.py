@@ -15,6 +15,7 @@ from pipeline import config as _conf
 from pipeline.languages import all_languages, language_code
 from pipeline.styles import list_styles
 from pipeline.tts import all_voices, native_voices_for
+import prompts as _prompts
 
 load_dotenv()
 
@@ -130,29 +131,19 @@ def match_voice(payload: VoiceMatchRequest):
     messages = [
         {
             "role": "system",
-            "content": (
-                "You are a voice casting assistant. The user will describe the kind of voice they want "
-                "for a video dubbing project. Your job is to recommend the top 3 best matching voices from "
-                "the Cartesia TTS voice catalog below, ranked from best to third-best match.\n\n"
-                f"VOICE CATALOG:\n{catalog}\n\n"
-                "Rules:\n"
-                "- You MUST pick exactly 3 DIFFERENT voice names from the catalog above. No duplicates. Do NOT invent names.\n"
-                "- Prefer voices that match the target language when available.\n"
-                "- Reply with ONLY a valid JSON array of 3 objects: "
-                '[{"voice": "<exact voice name>", "explanation": "<one sentence why>"}, ...]\n'
-                "- No markdown, no code fences, no thinking, just the raw JSON array."
-            ),
+            "content": _prompts.load("voice_match", "system", catalog=catalog),
         },
         {
             "role": "user",
-            "content": (
-                f"Target language: {payload.language or 'not specified'}\n"
-                f"Voice description: {payload.description}"
+            "content": _prompts.load(
+                "voice_match", "user",
+                language=payload.language or "not specified",
+                description=payload.description,
             ),
         },
     ]
 
-    model = cfg["models"]["translation"]
+    model = cfg["models"]["video_chat"]
 
     last_error = ""
     for attempt in range(_MAX_VOICE_MATCH_RETRIES):

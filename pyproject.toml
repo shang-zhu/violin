@@ -1,7 +1,7 @@
 [project]
-name = "VideoLingua"
+name = "Violin"
 version = "0.1.0"
-description = "Translate educational videos into 42 languages using Together AI"
+description = "Translate educational videos into 42 languages using Together AI (formerly VideoLingua)"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.13"
@@ -30,12 +30,12 @@ dependencies = [
 ]
 
 [project.scripts]
-videolingua = "main:main"
-videolingua-api = "run_api:main"
+violin = "main:main"
+violin-api = "run_api:main"
 
 [project.urls]
-Repository = "https://github.com/shang-zhu/VideoLingua"
-Issues = "https://github.com/shang-zhu/VideoLingua/issues"
+Repository = "https://github.com/shang-zhu/Violin"
+Issues = "https://github.com/shang-zhu/Violin/issues"
 
 [build-system]
 requires = ["hatchling"]

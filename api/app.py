@@ -3,6 +3,7 @@
 import pathlib
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -11,7 +12,7 @@ from .routes import catalog, chat, files, jobs
 _STATIC = pathlib.Path(__file__).parent / "static"
 
 app = FastAPI(
-    title="VideoLingua API",
+    title="Violin API",
     description=(
         "Translate educational videos into 42 languages using Together AI. "
         "Upload a video, poll for status, then download the dubbed output."
@@ -19,6 +20,13 @@ app = FastAPI(
     version="0.1.0",
     docs_url="/docs",
     redoc_url="/redoc",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(jobs.router)

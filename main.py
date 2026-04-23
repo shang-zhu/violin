@@ -1,5 +1,5 @@
 """
-VideoLingua CLI
+Violin CLI
 
 Usage:
     uv run main.py <input_video> <output_video> --language <target_language>
@@ -28,6 +28,7 @@ from together import Together
 from pipeline import config as pipeline_config
 from pipeline.costs import CostTracker
 from pipeline.languages import language_code as _language_code
+from pipeline.llm_client import make_translation_client
 from pipeline.styles import StyleProfile, list_styles, resolve as resolve_style
 from pipeline.tts import native_voices_for
 from pipeline.extractor import extract_audio, get_video_duration
@@ -66,12 +67,15 @@ def translate_video(
     source_language: str = "auto-detect",
     diarize: bool = True,
     style: StyleProfile | None = None,
+    voiceover: bool = True,
 ) -> None:
     api_key = os.environ.get("TOGETHER_API_KEY")
     if not api_key:
         raise RuntimeError("TOGETHER_API_KEY environment variable is not set.")
 
     client = Together(api_key=api_key)
+    cfg = pipeline_config.get()
+    translation_client = make_translation_client(cfg)
     tmp_dir = Path(tempfile.mkdtemp(prefix="vidtrans_"))
     tracker = CostTracker()
 
@@ -127,7 +131,7 @@ def translate_video(
 
         print(f"\n[3/5] Translating to {target_language}...")
         translated = translate_segments(
-            segments, target_language, client, source_language,
+            segments, target_language, translation_client, source_language,
             tracker=tracker, style_directives=style.translation_directives,
             style_temperature=style.temperature,
         )
@@ -147,9 +151,13 @@ def translate_video(
             gender_idx = 0 if pipeline_config.get()["pipeline"]["voice_gender"] == "male" else 1
             effective_voice = native_voices_for(lang_code)[gender_idx]
 
+        vo_volume = pipeline_config.get()["merge_video"].get("voiceover_volume", 0.35)
+        gap_vol = min(1.0, 2 * vo_volume) if voiceover else 1.0
         plan = prepare_merge(
             input_path, translated, total_duration,
-            preserve_gap_audio=diarize,
+            preserve_gap_audio=diarize or voiceover,
+            mix_volume=vo_volume if voiceover else 0.0,
+            gap_volume=gap_vol,
         )
         gap_exc: list[Exception] = []
 
@@ -173,11 +181,17 @@ def translate_video(
         tracker.record_step("TTS (Cartesia Sonic 3)")
 
         print("\n[5/5] Building aligned video...")
+        orig_audio_out = None
+        if voiceover:
+            out_p = Path(output_path)
+            orig_audio_out = str(out_p.with_stem(out_p.stem + "_original").with_suffix(".m4a"))
         aligned_segments = build_aligned_video(
             input_path, translated, tts_paths, total_duration, output_path,
             merge_plan=plan,
+            original_audio_path=orig_audio_out,
         )
-        tracker.record_step("Video alignment & merge")
+        if orig_audio_out:
+            print(f"      Original audio → {orig_audio_out}")
 
         if subtitles:
             srt_path = Path(output_path).with_suffix(".srt")
@@ -222,6 +236,14 @@ def main() -> None:
         help="Translate all speakers (no diarization)"
     )
     parser.add_argument(
+        "--voiceover", action="store_true", default=None,
+        help="Voice-over mode: keep original audio underneath the dub (default)"
+    )
+    parser.add_argument(
+        "--no-voiceover", action="store_true", default=None,
+        help="Full replacement: dubbed audio only, no original audio"
+    )
+    parser.add_argument(
         "--style", "-s", default=None,
         help='Translation style profile (e.g. standard, kids, academic, casual). '
              'Use "--style list" to see all available styles.'
@@ -249,6 +271,13 @@ def main() -> None:
     else:
         diarize = pipeline_config.get()["pipeline"]["diarize"]
 
+    if args.no_voiceover:
+        voiceover = False
+    elif args.voiceover:
+        voiceover = True
+    else:
+        voiceover = True
+
     style_name = args.style or pipeline_config.get()["pipeline"].get("style", "standard")
     style = resolve_style(style_name)
 
@@ -261,6 +290,7 @@ def main() -> None:
         args.source_language,
         diarize,
         style,
+        voiceover,
     )
 
 

@@ -40,15 +40,21 @@ class CostTracker:
 
     def print_summary(self) -> None:
         from . import config as _conf
+        from .llm_client import get_translation_provider
 
-        pricing = _conf.get()["pricing"]
+        cfg = _conf.get()
+        pricing = cfg["pricing"]
+        provider = get_translation_provider(cfg)
         total_time = sum(s["elapsed"] for s in self._steps)
 
         whisper_cost = self.audio_minutes * pricing["whisper_per_minute"]
+
+        llm_pricing = pricing["translation"].get(provider, pricing["translation"].get("together", {}))
         llm_cost = (
-            self.llm_input_tokens / 1_000_000 * pricing["llm_per_m_input_tokens"]
-            + self.llm_output_tokens / 1_000_000 * pricing["llm_per_m_output_tokens"]
+            self.llm_input_tokens / 1_000_000 * llm_pricing["per_m_input_tokens"]
+            + self.llm_output_tokens / 1_000_000 * llm_pricing["per_m_output_tokens"]
         )
+
         tts_cost = self.tts_characters / 1_000_000 * pricing["tts_per_m_characters"]
         total_cost = whisper_cost + llm_cost + tts_cost
 
@@ -67,7 +73,7 @@ class CostTracker:
         print()
         print(f"  {'Transcription':<22} {self.audio_minutes:>7.1f} min"
               f"          ${whisper_cost:>8.4f}")
-        print(f"  {'Translation':<22} {self.llm_input_tokens:>7,} in"
+        print(f"  {'Translation ({provider})':<22} {self.llm_input_tokens:>7,} in"
               f" / {self.llm_output_tokens:>7,} out"
               f"  ${llm_cost:>8.4f}  ({self.llm_calls} calls)")
         print(f"  {'TTS':<22} {self.tts_characters:>7,} chars"

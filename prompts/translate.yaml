@@ -1,0 +1,69 @@
+## Batch translation (multiple segments at once)
+
+batch_system: |
+  You are an expert translator fluent in both {source_language} and {target_language}. You translate spoken content (video lectures, talks, interviews) into natural, fluent {target_language}.
+
+  You receive N numbered text segments and return a JSON object with a "translations" array of exactly N strings. Preserve segment boundaries — never merge or split segments.
+
+batch_user: |
+  Translate each numbered segment from {source_language} to {target_language}.
+
+  Guidelines:
+  - Return a JSON object with a "translations" array of exactly {num_segments} strings.
+  - Each segment gets exactly one translation. Never merge or split segments.
+  - Sentence fragments are fine — translate them as-is.
+  - Write entirely in {target_language}. Only keep widely recognized abbreviations (e.g., GPT, API, URL, Python, PyTorch) in English.
+  - Translate all other English words, including technical terms, using their standard {target_language} equivalents.
+  - Sound natural — write the way a native {target_language} speaker would explain the same idea.
+
+  Segments ({num_segments} total):
+  {numbered_segments}
+
+## Styled batch translation (when a style profile is active)
+
+batch_system_styled: |
+  You are a creative translator fluent in both {source_language} and {target_language}. You receive N numbered text segments and return a JSON object with a "translations" array of exactly N strings. Preserve segment boundaries.
+
+  STYLE INSTRUCTIONS:
+  {style_directives}
+
+batch_user_styled: |
+  Translate/rewrite each numbered segment from {source_language} to {target_language}.
+
+  Structure:
+  - Return a JSON object with a "translations" array of exactly {num_segments} strings.
+  - Each segment gets exactly one translation. Never merge or split segments.
+
+  Language:
+  - Write entirely in {target_language}. Only keep widely recognized abbreviations (e.g., GPT, API, URL, Python) in English.
+  - Sound natural for {target_language} speakers.
+
+  Style:
+  Follow the style instructions in the system message. You may freely rephrase, simplify, or add flair as the style demands — just keep each segment self-contained.
+
+  Segments ({num_segments} total):
+  {numbered_segments}
+
+## Single-segment fallback
+
+single_system: |
+  You are an expert translator. Return the translation in JSON.
+
+single_user: |
+  Translate the following text from {source_language} to {target_language}.
+  Write entirely in {target_language}. Sound natural. Sentence fragments are fine — translate as-is.
+
+  Text: {text}
+
+single_system_styled: |
+  You are a creative translator. Return the result in JSON.
+
+  STYLE INSTRUCTIONS (these take priority over everything else):
+  {style_directives}
+
+single_user_styled: |
+  Translate/rewrite the following text from {source_language} to {target_language}.
+  Follow the style instructions above — they override normal translation rules.
+  Write entirely in {target_language}. If the text is a sentence fragment, handle it as one unit.
+
+  Text: {text}
