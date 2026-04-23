@@ -157,6 +157,55 @@ def _run_job(job_id: str, params: dict, api_key_override: str | None = None) -> 
         update_status(job_id, JobStatus.failed, str(exc))
 
 
+def _download_url(job_id: str, url: str) -> Path:
+    """Download a video from a URL using yt-dlp. Returns the path to the downloaded file."""
+    import yt_dlp
+
+    from .storage import _job_dir
+
+    job_dir = _job_dir(job_id)
+    output_template = str(job_dir / "input.%(ext)s")
+
+    ydl_opts = {
+        "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+        "outtmpl": output_template,
+        "merge_output_format": "mp4",
+        "quiet": True,
+        "no_warnings": True,
+        "noplaylist": True,
+        "max_filesize": 500 * 1024 * 1024,  # 500 MB limit
+    }
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=True)
+        duration = info.get("duration", 0)
+        if duration and duration > 7200:
+            raise ValueError(f"Video too long ({duration // 60} min). Max 2 hours.")
+
+    for p in job_dir.glob("input.*"):
+        return p
+    raise FileNotFoundError("yt-dlp download succeeded but no input file found.")
+
+
+def _run_url_job(job_id: str, params: dict, url: str, api_key_override: str | None = None) -> None:
+    """Download video from URL, then run the normal translation pipeline."""
+    update_status(job_id, JobStatus.running)
+    _progress(job_id, 1, "Downloading video from URL…")
+
+    try:
+        _download_url(job_id, url)
+    except Exception as exc:
+        update_status(job_id, JobStatus.failed, f"Download failed: {exc}")
+        return
+
+    _run_job(job_id, params, api_key_override)
+
+
 def submit_job(job_id: str, params: dict, *, api_key_override: str | None = None) -> None:
     """Submit a job to the thread pool for background execution."""
     _executor.submit(_run_job, job_id, params, api_key_override)
+
+
+def submit_url_job(job_id: str, params: dict, url: str, *, api_key_override: str | None = None) -> None:
+    """Submit a URL-based job to the thread pool."""
+    _executor.submit(_run_url_job, job_id, params, url, api_key_override)

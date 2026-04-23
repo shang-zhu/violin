@@ -6,15 +6,17 @@ import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, Form, HTTPException, Request, UploadFile
+from pydantic import BaseModel
 
 from api.models import JobResponse, JobStatus
 from api.storage import create_job, delete_job, get_job, input_path, output_video_path
 from api.usage import has_free_trial, record_usage, remaining_trials
-from api.worker import submit_job
+from api.worker import submit_job, submit_url_job
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 _ALLOWED_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"}
+_MAX_DURATION_SECONDS = 1800
 
 
 def _client_ip(request: Request) -> str:
@@ -72,12 +74,66 @@ async def create_translation_job(
     dest.write_bytes(content)
 
     api_key_override = user_api_key.strip() or None
-    if not using_own_key:
-        record_usage(client_ip)
-
     submit_job(job_id, params, api_key_override=api_key_override)
 
     job = get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=500, detail="Failed to read job after creation.")
+
+    if not using_own_key:
+        record_usage(client_ip)
+
+    return job
+
+
+class UrlJobRequest(BaseModel):
+    url: str
+    language: str
+    voice: str = ""
+    source_language: str = "auto-detect"
+    subtitles: bool = True
+    style: str = "standard"
+    voiceover: bool = True
+    user_api_key: str = ""
+
+
+@router.post("/from-url", response_model=JobResponse, status_code=202)
+async def create_job_from_url(request: Request, body: UrlJobRequest):
+    """Create a translation job from a video URL (YouTube, etc.)."""
+    if not body.url.strip():
+        raise HTTPException(status_code=400, detail="URL is required.")
+
+    client_ip = _client_ip(request)
+    using_own_key = bool(body.user_api_key.strip())
+
+    if not using_own_key and not has_free_trial(client_ip):
+        raise HTTPException(
+            status_code=403,
+            detail="Free trial used. Please provide your own Together API key to continue.",
+        )
+
+    job_id = uuid.uuid4().hex
+    params = {
+        "language": body.language,
+        "voice": body.voice,
+        "source_language": body.source_language,
+        "subtitles": body.subtitles,
+        "style": body.style,
+        "voiceover": body.voiceover,
+    }
+
+    create_job(job_id, params)
+
+    api_key_override = body.user_api_key.strip() or None
+    submit_url_job(job_id, params, body.url.strip(), api_key_override=api_key_override)
+
+    job = get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=500, detail="Failed to read job after creation.")
+
+    if not using_own_key:
+        record_usage(client_ip)
+
     return job
 
 

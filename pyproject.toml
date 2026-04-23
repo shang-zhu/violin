@@ -26,6 +26,7 @@ dependencies = [
     "soundfile>=0.13.1",
     "together>=2.5.0",
     "uvicorn>=0.42.0",
+    "yt-dlp>=2025.1.0",
 ]
 
 [project.scripts]
