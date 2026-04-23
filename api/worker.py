@@ -45,12 +45,12 @@ def _progress(job_id: str, step: int, message: str) -> None:
     append_progress(job_id, step, TOTAL_STEPS, message)
 
 
-def _run_job(job_id: str, params: dict) -> None:
+def _run_job(job_id: str, params: dict, api_key_override: str | None = None) -> None:
     update_status(job_id, JobStatus.running)
 
-    api_key = os.environ.get("TOGETHER_API_KEY")
+    api_key = api_key_override or os.environ.get("TOGETHER_API_KEY")
     if not api_key:
-        update_status(job_id, JobStatus.failed, "TOGETHER_API_KEY is not configured.")
+        update_status(job_id, JobStatus.failed, "No API key available. Please provide your own Together API key.")
         return
 
     target_language = params["language"]
@@ -67,7 +67,7 @@ def _run_job(job_id: str, params: dict) -> None:
 
         client = Together(api_key=api_key)
         cfg = pipeline_config.get()
-        translation_client = make_translation_client(cfg)
+        translation_client = make_translation_client(cfg, api_key_override=api_key)
         tmp_dir = Path(tempfile.mkdtemp(prefix=f"vidtrans_{job_id}_"))
 
         try:
@@ -157,6 +157,6 @@ def _run_job(job_id: str, params: dict) -> None:
         update_status(job_id, JobStatus.failed, str(exc))
 
 
-def submit_job(job_id: str, params: dict) -> None:
+def submit_job(job_id: str, params: dict, *, api_key_override: str | None = None) -> None:
     """Submit a job to the thread pool for background execution."""
-    _executor.submit(_run_job, job_id, params)
+    _executor.submit(_run_job, job_id, params, api_key_override)

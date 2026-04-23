@@ -1,5 +1,7 @@
 """FastAPI application factory."""
 
+import asyncio
+import logging
 import os
 import pathlib
 
@@ -9,6 +11,8 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .routes import catalog, chat, files, jobs
+
+logger = logging.getLogger(__name__)
 
 _STATIC = pathlib.Path(__file__).parent / "static"
 
@@ -43,3 +47,23 @@ app.mount("/static", StaticFiles(directory=str(_STATIC)), name="static")
 @app.get("/", include_in_schema=False)
 def root():
     return FileResponse(str(_STATIC / "index.html"))
+
+
+@app.on_event("startup")
+async def _start_cleanup_loop():
+    from .config import JOB_TTL_HOURS
+    if JOB_TTL_HOURS <= 0:
+        return
+
+    async def _cleanup_loop():
+        from .storage import cleanup_old_jobs
+        while True:
+            await asyncio.sleep(3600)
+            try:
+                deleted = cleanup_old_jobs(JOB_TTL_HOURS)
+                if deleted:
+                    logger.info("Cleaned up %d expired job(s)", deleted)
+            except Exception:
+                logger.exception("Job cleanup failed")
+
+    asyncio.create_task(_cleanup_loop())
