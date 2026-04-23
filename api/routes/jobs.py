@@ -100,6 +100,9 @@ class UrlJobRequest(BaseModel):
 @router.post("/from-url", response_model=JobResponse, status_code=202)
 async def create_job_from_url(request: Request, body: UrlJobRequest):
     """Create a translation job from a video URL (YouTube, etc.)."""
+    from api.config import URL_UPLOAD
+    if not URL_UPLOAD:
+        raise HTTPException(status_code=403, detail="URL upload is disabled on this server.")
     if not body.url.strip():
         raise HTTPException(status_code=400, detail="URL is required.")
 

@@ -167,7 +167,7 @@
       <div x-show="phase === 'upload'" class="p-8 slide-up">
 
         <!-- Source tabs: Upload / URL -->
-        <div class="flex rounded-lg bg-cream-200/60 p-1 mb-5">
+        <div x-show="urlUploadEnabled" class="flex rounded-lg bg-cream-200/60 p-1 mb-5">
           <button
             @click="inputMode = 'file'; videoUrl = ''"
             class="flex-1 py-2 px-4 rounded-md text-xs font-semibold transition-all duration-200 flex items-center justify-center gap-1.5"
@@ -798,6 +798,7 @@ function app() {
     // input mode
     inputMode: 'file',
     videoUrl: '',
+    urlUploadEnabled: false,
 
     // API key / trial
     userApiKey: localStorage.getItem('violin_api_key') || '',
@@ -892,6 +893,11 @@ function app() {
         const res = await fetch('/languages');
         this.languages = await res.json();
         this._autoSelectLanguage();
+      } catch (_) {}
+      try {
+        const cfg = await fetch('/app-config');
+        const data = await cfg.json();
+        this.urlUploadEnabled = !!data.url_upload;
       } catch (_) {}
       await this._checkTrial();
       this._resumeJob();

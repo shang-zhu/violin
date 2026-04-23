@@ -49,6 +49,12 @@ def root():
     return FileResponse(str(_STATIC / "index.html"))
 
 
+@app.get("/app-config", include_in_schema=False)
+def app_config():
+    from .config import URL_UPLOAD
+    return {"url_upload": URL_UPLOAD}
+
+
 @app.on_event("startup")
 async def _start_cleanup_loop():
     from .config import JOB_TTL_HOURS
