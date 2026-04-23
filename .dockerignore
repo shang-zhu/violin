@@ -1,0 +1,17 @@
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+jobs/
+__pycache__
+*.pyc
+*.pyo
+.venv
+.mypy_cache
+.ruff_cache
+*.egg-info
+dist/
+build/
+*.md
+!README.md

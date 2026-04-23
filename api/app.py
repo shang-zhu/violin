@@ -1,5 +1,6 @@
 """FastAPI application factory."""
 
+import os
 import pathlib
 
 from fastapi import FastAPI
@@ -10,6 +11,8 @@ from fastapi.staticfiles import StaticFiles
 from .routes import catalog, chat, files, jobs
 
 _STATIC = pathlib.Path(__file__).parent / "static"
+
+_ALLOWED_ORIGINS = os.environ.get("CORS_ORIGINS", "*").split(",")
 
 app = FastAPI(
     title="Violin API",
@@ -24,7 +27,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_ALLOWED_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )

@@ -1,0 +1,26 @@
+services:
+  violin:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - jobs_data:/app/jobs
+    expose:
+      - "8000"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  jobs_data:
+  caddy_data:
+  caddy_config:
