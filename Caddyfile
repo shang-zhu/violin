@@ -1,0 +1,12 @@
+# Replace with your actual domain name.
+# Caddy will automatically provision a Let's Encrypt TLS certificate
+# once the domain's DNS A record points to this server's public IP.
+#
+# For local testing without a domain, replace with:
+#   :80 {
+#       reverse_proxy violin:8000
+#   }
+
+yourdomain.com {
+    reverse_proxy violin:8000
+}
