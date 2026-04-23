@@ -574,14 +574,44 @@
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
           </svg>
         </div>
-        <p class="text-base font-semibold text-ink-800 mb-2">Something went wrong</p>
-        <p class="text-sm text-ink-500 mb-6 font-mono bg-cream-100 rounded-lg px-4 py-3 text-left break-words" x-text="errorMessage || 'Unknown error'"></p>
-        <button
-          @click="reset()"
-          class="py-3 px-8 bg-ink-800 hover:bg-accent-500 text-cream-100 rounded-full font-semibold text-sm shadow-[0_8px_28px_-12px_rgba(42,36,32,0.25)] transition-all duration-200 active:scale-[0.98]"
-        >
-          Try again
-        </button>
+        <p class="text-base font-semibold text-ink-800 mb-2" x-text="needsKey && !userApiKey.trim() ? 'Free trial used' : 'Something went wrong'"></p>
+        <p class="text-sm text-ink-500 mb-4 font-mono bg-cream-100 rounded-lg px-4 py-3 text-left break-words" x-text="errorMessage || 'Unknown error'"></p>
+
+        <template x-if="needsKey">
+          <div class="mb-5 text-left w-full max-w-sm mx-auto">
+            <label class="block text-xs font-semibold text-ink-400 uppercase tracking-[0.14em] mb-2">Your Together API Key</label>
+            <input
+              x-model="userApiKey"
+              type="password"
+              placeholder="Paste your key here"
+              class="w-full bg-cream-100 border border-cream-300 rounded-lg px-4 py-3 text-sm text-ink-800 placeholder-ink-300 focus:outline-none focus:ring-2 focus:ring-gold-300 focus:border-transparent transition"
+              @input="localStorage.setItem('violin_api_key', userApiKey)"
+            />
+            <p class="text-[11px] text-ink-400 mt-1.5">
+              Get a key at <a href="https://api.together.ai/settings/api-keys" target="_blank" class="underline underline-offset-2 hover:text-ink-600">api.together.ai</a>
+            </p>
+          </div>
+        </template>
+
+        <div class="flex gap-3 justify-center">
+          <template x-if="needsKey && userApiKey.trim()">
+            <button
+              @click="phase = 'upload'"
+              class="py-3 px-8 bg-ink-800 hover:bg-accent-500 text-cream-100 rounded-full font-semibold text-sm shadow-[0_8px_28px_-12px_rgba(42,36,32,0.25)] transition-all duration-200 active:scale-[0.98]"
+            >
+              Continue with my key
+            </button>
+          </template>
+          <button
+            @click="reset()"
+            class="py-3 px-8 rounded-full font-semibold text-sm transition-all duration-200 active:scale-[0.98]"
+            :class="needsKey && userApiKey.trim()
+              ? 'bg-cream-200 hover:bg-cream-300 text-ink-700 border border-cream-300'
+              : 'bg-ink-800 hover:bg-accent-500 text-cream-100 shadow-[0_8px_28px_-12px_rgba(42,36,32,0.25)]'"
+          >
+            Start over
+          </button>
+        </div>
       </div>
 
     </div><!-- /card -->
