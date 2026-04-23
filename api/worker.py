@@ -18,7 +18,7 @@ from pipeline.languages import language_code
 from pipeline.llm_client import make_translation_client
 from pipeline.merger import build_aligned_video, build_gap_chunks, generate_srt, prepare_merge
 from pipeline.styles import resolve as resolve_style
-from pipeline.transcriber import find_main_speaker, merge_continuous_segments, transcribe
+from pipeline.transcriber import merge_continuous_segments, transcribe
 from pipeline.translator import translate_segments
 from pipeline.tts import native_voices_for, synthesize_segments
 
@@ -56,7 +56,6 @@ def _run_job(job_id: str, params: dict) -> None:
     target_language = params["language"]
     voice = params["voice"]
     source_language = params["source_language"]
-    diarize = params["diarize"]
     subtitles = params["subtitles"]
     voiceover = params.get("voiceover", True)
     style = resolve_style(params.get("style", "standard"))
@@ -76,17 +75,10 @@ def _run_job(job_id: str, params: dict) -> None:
             audio_path = extract_audio(str(src), str(tmp_dir / "audio.wav"))
             total_duration = get_video_duration(str(src))
 
-            label = "Transcribing with Whisper Large v3…"
-            if diarize:
-                label += " (+ diarization)"
-            _progress(job_id, 2, f"{label} (video duration: {total_duration:.0f}s)")
-            segments = transcribe(audio_path, client, diarize=diarize)
+            _progress(job_id, 2, f"Transcribing with Whisper Large v3… (video duration: {total_duration:.0f}s)")
+            segments = transcribe(audio_path, client)
 
             lang_code = language_code(target_language)
-
-            if diarize:
-                main_speaker = find_main_speaker(segments)
-                segments = [s for s in segments if s.speaker == main_speaker]
 
             segments = merge_continuous_segments(segments)
 
@@ -108,7 +100,7 @@ def _run_job(job_id: str, params: dict) -> None:
             gap_vol = min(1.0, 2 * vo_volume) if voiceover else 1.0
             plan = prepare_merge(
                 str(src), translated, total_duration,
-                preserve_gap_audio=diarize or voiceover,
+                preserve_gap_audio=voiceover,
                 original_audio_volume=1.0 if voiceover else 0.0,
                 gap_volume=gap_vol,
             )

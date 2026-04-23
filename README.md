@@ -19,8 +19,6 @@ Video
   │
   ├─ Together AI Whisper v3 ──► Transcribe → timestamped segments
   │
-  ├─ pyannote.audio ──────────► Speaker diarization → per-speaker voice assignment
-  │
   ├─ Together AI Qwen3.5-397B ► Translate segments → target language
   │
   ├─ Cartesia Sonic 3 ────────► Synthesize dubbed audio (native-language voices)
@@ -34,26 +32,23 @@ Video
 | Transcription | `openai/whisper-large-v3` | Together AI |
 | Translation | `Qwen/Qwen3.5-397B-A17B` | Together AI |
 | TTS | `cartesia/sonic-3` | Together AI |
-| Diarization | `pyannote/speaker-diarization-3.1` | Local (HuggingFace) |
 
 ## Features
 
 - **42 target languages** via Cartesia Sonic 3
 - **Native-language voices** — automatically selects a language-matched voice (e.g. `chinese commercial man` for Chinese, `korean narrator man` for Korean)
-- **Speaker diarization** — multiple speakers in the same video each get their own consistent voice
 - **Hallucination filtering** — removes Whisper noise segments (`[Music]`, single-word fragments, sub-0.8s clips)
 - **Natural dubbing speed** — no aggressive pitch/tempo distortion; segments play at natural TTS speed
 - **SRT subtitles** generated alongside every output video
 - **Video chat UI** — watch the translated video and ask in-context questions against nearby subtitles plus sampled frames
 - **REST API** — submit jobs, poll status, download results over HTTP
-- **Single provider** — everything runs through Together AI except local diarization
+- **Single provider** — everything runs through Together AI
 
 ## Requirements
 
 - Python 3.13+
 - [uv](https://github.com/astral-sh/uv)
 - A [Together AI](https://www.together.ai) API key
-- A [HuggingFace](https://huggingface.co) token (for speaker diarization)
 
 ## Installation
 
@@ -65,22 +60,11 @@ cp .env.example .env
 # fill in your API keys in .env
 ```
 
-### HuggingFace model access
-
-Speaker diarization uses gated models. Accept terms at each of these (one-time, free):
-
-- https://huggingface.co/pyannote/speaker-diarization-3.1
-- https://huggingface.co/pyannote/segmentation-3.0
-- https://huggingface.co/pyannote/speaker-diarization-community-1
-
 ## CLI Usage
 
 ```bash
 # Basic — translate to Spanish
 uv run main.py lecture.mp4 lecture_es.mp4 --language Spanish
-
-# Skip diarization (single-speaker video, faster)
-uv run main.py lecture.mp4 lecture_zh.mp4 --language Chinese --diarize
 
 # Custom voice
 uv run main.py lecture.mp4 lecture_fr.mp4 --language French --voice "french narrator man"
@@ -99,7 +83,6 @@ uv run main.py lecture.mp4 lecture_ko.mp4 --language Korean --source-language En
 | `--language`, `-l` | *(required)* | Target language name (e.g. `Spanish`, `Japanese`) |
 | `--voice`, `-v` | auto | Cartesia Sonic 3 voice. Defaults to the primary native voice for the target language |
 | `--source-language` | `auto-detect` | Source language hint for translation |
-| `--diarize` | off | Conduct speaker diarization (faster, single voice) |
 | `--no-subtitles` | off | Skip SRT generation |
 
 ## REST API
@@ -175,7 +158,6 @@ All 42 languages supported by Cartesia Sonic 3, with native-matched voices where
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `TOGETHER_API_KEY` | Yes | Together AI API key |
-| `HF_TOKEN` | Yes (diarization) | HuggingFace token for pyannote models |
 | `TOGETHER_TTS_BASE_URL` | No | Custom base URL for Together AI dedicated endpoints |
 | `JOBS_DIR` | No | Directory for API job storage (default: `./jobs`) |
 | `MAX_WORKERS` | No | Max concurrent API translation jobs (default: `2`) |
@@ -191,7 +173,6 @@ Violin/
 │   ├── transcriber.py       # Whisper transcription + hallucination filtering
 │   ├── translator.py        # Qwen3.5-397B translation (batched)
 │   ├── tts.py               # Cartesia Sonic 3 TTS + native voice selection
-│   ├── diarizer.py          # pyannote speaker diarization
 │   ├── merger.py            # Audio assembly + SRT generation + video merge
 │   ├── languages.py         # BCP-47 language code mapping
 │   └── ffmpeg_utils.py      # Bundled ffmpeg helpers (no system ffmpeg needed)

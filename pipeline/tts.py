@@ -10,7 +10,7 @@ from .costs import CostTracker
 from .transcriber import Segment
 
 # Native-sounding voices per language — matched to Cartesia's language-specific voice catalog.
-# Ordered: [primary male, primary female] so diarization can pick appropriately.
+# Ordered: [primary male, primary female].
 _NATIVE_VOICES: dict[str, list[str]] = {
     "zh": ["chinese commercial man", "chinese female conversational"],
     "ja": ["japanese male conversational", "japanese woman conversational"],

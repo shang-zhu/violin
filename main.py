@@ -7,7 +7,6 @@ Usage:
 Examples:
     uv run main.py lecture.mp4 lecture_es.mp4 --language Spanish
     uv run main.py lesson.mp4 lesson_ja.mp4 --language Japanese
-    uv run main.py talk.mp4 talk_fr.mp4 --language French --no-diarize
     uv run main.py talk.mp4 talk_zh.mp4 --language Chinese --style kids
 """
 
@@ -33,7 +32,7 @@ from pipeline.styles import StyleProfile, list_styles, resolve as resolve_style
 from pipeline.tts import native_voices_for
 from pipeline.extractor import extract_audio, get_video_duration
 from pipeline.merger import build_aligned_video, build_gap_chunks, generate_srt, prepare_merge
-from pipeline.transcriber import find_main_speaker, merge_continuous_segments, transcribe
+from pipeline.transcriber import merge_continuous_segments, transcribe
 from pipeline.translator import translate_segments
 from pipeline.tts import synthesize_segments
 
@@ -65,7 +64,6 @@ def translate_video(
     voice: str = "tutorial man",
     subtitles: bool = True,
     source_language: str = "auto-detect",
-    diarize: bool = True,
     style: StyleProfile | None = None,
     voiceover: bool = True,
 ) -> None:
@@ -94,36 +92,13 @@ def translate_video(
         print(f"      Duration: {total_duration:.1f}s")
         tracker.record_step("Audio extraction")
 
-        step_label = "Transcribing with Whisper Large v3"
-        if diarize:
-            step_label += " + speaker diarization"
-        print(f"\n[2/5] {step_label}...")
-        segments = transcribe(audio_path, client, diarize=diarize)
+        print("\n[2/5] Transcribing with Whisper Large v3...")
+        segments = transcribe(audio_path, client)
         print(f"      {len(segments)} segments found")
         tracker.audio_minutes = total_duration / 60.0
         tracker.record_step("Transcription (Whisper)")
 
         lang_code = _language_code(target_language)
-
-        if diarize:
-            main_speaker = find_main_speaker(segments)
-            all_segments = segments
-            main_segments = [s for s in segments if s.speaker == main_speaker]
-
-            speaker_durations: dict[str, float] = {}
-            for seg in all_segments:
-                speaker_durations[seg.speaker] = (
-                    speaker_durations.get(seg.speaker, 0) + (seg.end - seg.start)
-                )
-            print(f"      Speakers detected: {len(speaker_durations)}")
-            for spk, dur in sorted(speaker_durations.items(), key=lambda x: -x[1]):
-                marker = " <-- main" if spk == main_speaker else ""
-                print(f"        {spk}: {dur:.1f}s{marker}")
-            print(f"      Translating {len(main_segments)} segments from {main_speaker}")
-            print(f"      Preserving {len(all_segments) - len(main_segments)} segments "
-                  "from other speakers (original audio)")
-
-            segments = main_segments
 
         raw_count = len(segments)
         segments = merge_continuous_segments(segments)
@@ -155,7 +130,7 @@ def translate_video(
         gap_vol = min(1.0, 2 * vo_volume) if voiceover else 1.0
         plan = prepare_merge(
             input_path, translated, total_duration,
-            preserve_gap_audio=diarize or voiceover,
+            preserve_gap_audio=voiceover,
             mix_volume=vo_volume if voiceover else 0.0,
             gap_volume=gap_vol,
         )
@@ -228,14 +203,6 @@ def main() -> None:
         help="Skip generating SRT subtitle file"
     )
     parser.add_argument(
-        "--diarize", action="store_true", default=None,
-        help="Enable speaker diarization — only translate the main speaker"
-    )
-    parser.add_argument(
-        "--no-diarize", action="store_true", default=None,
-        help="Translate all speakers (no diarization)"
-    )
-    parser.add_argument(
         "--voiceover", action="store_true", default=None,
         help="Voice-over mode: keep original audio underneath the dub (default)"
     )
@@ -264,13 +231,6 @@ def main() -> None:
     if not args.input or not args.output or not args.language:
         parser.error("input, output, and --language are required (unless using --style list)")
 
-    if args.diarize:
-        diarize = True
-    elif args.no_diarize:
-        diarize = False
-    else:
-        diarize = pipeline_config.get()["pipeline"]["diarize"]
-
     if args.no_voiceover:
         voiceover = False
     elif args.voiceover:
@@ -288,7 +248,6 @@ def main() -> None:
         args.voice,
         not args.no_subtitles,
         args.source_language,
-        diarize,
         style,
         voiceover,
     )

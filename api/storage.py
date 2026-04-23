@@ -88,7 +88,6 @@ def get_job(job_id: str) -> JobResponse | None:
         language=meta["language"],
         voice=meta["voice"],
         source_language=meta["source_language"],
-        diarize=meta["diarize"],
         subtitles=meta["subtitles"],
         progress=progress,
         error=meta.get("error"),
