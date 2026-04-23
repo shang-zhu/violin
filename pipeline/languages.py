@@ -1,4 +1,4 @@
-"""Shared language code mapping for the VideoLingua pipeline."""
+"""Shared language code mapping for the Violin pipeline."""
 
 # BCP-47 codes for Cartesia Sonic 3's 42 supported languages.
 LANG_CODES: dict[str, str] = {

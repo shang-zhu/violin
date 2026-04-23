@@ -1,4 +1,4 @@
-# VideoLingua
+# Violin
 
 Translate educational videos from one language to another using [Together AI](https://www.together.ai). Replaces the audio track with a dubbed voice in the target language and generates a subtitle file — available as a CLI or a REST API.
 
@@ -58,8 +58,8 @@ Video
 ## Installation
 
 ```bash
-git clone https://github.com/shang-zhu/VideoLingua
-cd VideoLingua
+git clone https://github.com/shang-zhu/Violin
+cd Violin
 uv sync
 cp .env.example .env
 # fill in your API keys in .env
@@ -183,7 +183,7 @@ All 42 languages supported by Cartesia Sonic 3, with native-matched voices where
 ## Project Structure
 
 ```
-VideoLingua/
+Violin/
 ├── main.py                  # CLI entry point
 ├── run_api.py               # API server entry point
 ├── pipeline/

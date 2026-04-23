@@ -1,5 +1,5 @@
 """
-VideoLingua CLI
+Violin CLI
 
 Usage:
     uv run main.py <input_video> <output_video> --language <target_language>

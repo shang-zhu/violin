@@ -12,7 +12,7 @@ from .routes import catalog, chat, files, jobs
 _STATIC = pathlib.Path(__file__).parent / "static"
 
 app = FastAPI(
-    title="VideoLingua API",
+    title="Violin API",
     description=(
         "Translate educational videos into 42 languages using Together AI. "
         "Upload a video, poll for status, then download the dubbed output."
