@@ -14,4 +14,4 @@ examples/
 #logs
 out_*.log
 translate_debug/
-jobs/
+jobs/.DS_Store
