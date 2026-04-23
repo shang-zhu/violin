@@ -7,6 +7,6 @@
 #       reverse_proxy violin:8000
 #   }
 
-yourdomain.com {
+violin-ai.com {
     reverse_proxy violin:8000
 }
