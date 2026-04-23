@@ -497,7 +497,13 @@
           </template>
         </div>
 
-        <div class="text-[11px] text-ink-300 text-center font-mono">job <span x-text="jobId"></span></div>
+        <div class="flex items-center justify-between mt-2">
+          <div class="text-[11px] text-ink-300 font-mono">job <span x-text="jobId"></span></div>
+          <button
+            @click="cancelJob()"
+            class="text-xs text-ink-400 hover:text-accent-500 underline underline-offset-2 transition-colors"
+          >Cancel</button>
+        </div>
       </div>
 
       <!-- ── PHASE: done ── -->
@@ -1133,12 +1139,24 @@ function app() {
         } else if (job.status === 'failed') {
           this.errorMessage = job.error || 'Translation failed.';
           this.phase = 'error';
+        } else if (job.status === 'cancelled') {
+          this._clearSavedJob();
+          this.reset();
         } else {
           setTimeout(() => this.poll(), 2000);
         }
       } catch (_) {
         setTimeout(() => this.poll(), 3000);
       }
+    },
+
+    async cancelJob() {
+      if (!this.jobId) return;
+      try {
+        await fetch(`/jobs/${this.jobId}/cancel`, { method: 'POST' });
+      } catch (_) {}
+      this._clearSavedJob();
+      this.reset();
     },
 
     async loadSegments() {

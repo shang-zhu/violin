@@ -13,6 +13,7 @@ class JobStatus(str, Enum):
     running = "running"
     done = "done"
     failed = "failed"
+    cancelled = "cancelled"
 
 
 class ProgressEvent(BaseModel):
