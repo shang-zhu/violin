@@ -242,7 +242,7 @@
               placeholder="https://www.youtube.com/watch?v=..."
               class="w-full bg-cream-50 border border-cream-300 rounded-lg px-4 py-3 text-sm text-ink-800 placeholder-ink-300 focus:outline-none focus:ring-2 focus:ring-gold-300 focus:border-transparent transition text-center"
             />
-            <p class="text-xs text-ink-400 mt-2">YouTube, Vimeo, X/Twitter, and <a href="https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md" target="_blank" class="underline underline-offset-2 hover:text-ink-600">1000+ sites</a> · max 2 hours</p>
+            <p class="text-xs text-ink-400 mt-2">Vimeo, X/Twitter, and <a href="https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md" target="_blank" class="underline underline-offset-2 hover:text-ink-600">1000+ sites</a> · max 2 hours · <span class="text-ink-300">YouTube may not work from cloud servers</span></p>
           </div>
         </div>
 
@@ -798,7 +798,7 @@ function app() {
 
     // API key / trial
     userApiKey: localStorage.getItem('violin_api_key') || '',
-    trialUsed: localStorage.getItem('violin_trial_used') === 'true',
+    trialUsed: false,
     needsKey: false,
     trialRemaining: -1,
 
@@ -1019,20 +1019,14 @@ function app() {
       localStorage.setItem('violin_job_lang', this.language);
       this.phase = 'processing';
       if (!usingOwnKey) {
-        this.trialUsed = true;
-        this.needsKey = true;
-        this.trialRemaining = 0;
-        localStorage.setItem('violin_trial_used', 'true');
+        this._checkTrial();
       }
       this.poll();
     },
 
     _onJobError(status, responseText) {
       if (status === 403) {
-        this.needsKey = true;
-        this.trialUsed = true;
-        this.trialRemaining = 0;
-        localStorage.setItem('violin_trial_used', 'true');
+        this._checkTrial();
         let detail = 'Free trial used. Please provide your own Together API key to continue.';
         try { detail = JSON.parse(responseText).detail || detail; } catch (_) {}
         this.errorMessage = detail;
