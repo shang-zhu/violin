@@ -5,21 +5,29 @@ from __future__ import annotations
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, Form, HTTPException, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Form, HTTPException, Request, UploadFile
 
 from api.models import JobResponse, JobStatus
 from api.storage import create_job, delete_job, get_job, input_path, output_video_path
+from api.usage import has_free_trial, record_usage, remaining_trials
 from api.worker import submit_job
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
-# Allowed video MIME types / extensions
 _ALLOWED_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"}
+
+
+def _client_ip(request: Request) -> str:
+    """Extract the real client IP, respecting X-Forwarded-For from Caddy."""
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
 
 
 @router.post("", response_model=JobResponse, status_code=202)
 async def create_translation_job(
+    request: Request,
     file: UploadFile,
     language: str = Form(..., description="Target language name, e.g. Spanish, Japanese"),
     voice: str = Form("", description="Cartesia Sonic 3 voice (empty = auto native voice)"),
@@ -27,6 +35,7 @@ async def create_translation_job(
     subtitles: bool = Form(True, description="Generate SRT subtitle file"),
     style: str = Form("standard", description="Translation style profile (e.g. standard, kids, academic)"),
     voiceover: bool = Form(True, description="Voice-over mode: keep original audio underneath the dub"),
+    user_api_key: str = Form("", description="User-provided Together API key (optional)"),
 ):
     """Upload a video and start a translation job. Returns immediately with a job ID."""
     suffix = Path(file.filename or "video.mp4").suffix.lower()
@@ -34,6 +43,15 @@ async def create_translation_job(
         raise HTTPException(
             status_code=415,
             detail=f"Unsupported file type '{suffix}'. Allowed: {sorted(_ALLOWED_EXTENSIONS)}",
+        )
+
+    client_ip = _client_ip(request)
+    using_own_key = bool(user_api_key.strip())
+
+    if not using_own_key and not has_free_trial(client_ip):
+        raise HTTPException(
+            status_code=403,
+            detail="Free trial used. Please provide your own Together API key to continue.",
         )
 
     job_id = uuid.uuid4().hex
@@ -46,19 +64,29 @@ async def create_translation_job(
         "voiceover": voiceover,
     }
 
-    # Persist metadata first so GET /jobs/{id} works immediately
     create_job(job_id, params)
 
-    # Save uploaded file
-    from api.storage import _job_dir  # local import to avoid circular
+    from api.storage import _job_dir
     dest = _job_dir(job_id) / f"input{suffix}"
     content = await file.read()
     dest.write_bytes(content)
 
-    submit_job(job_id, params)
+    api_key_override = user_api_key.strip() or None
+    if not using_own_key:
+        record_usage(client_ip)
+
+    submit_job(job_id, params, api_key_override=api_key_override)
 
     job = get_job(job_id)
     return job
+
+
+@router.get("/trial-status")
+async def trial_status(request: Request):
+    """Check how many free trial jobs remain for this client IP."""
+    client_ip = _client_ip(request)
+    remaining = remaining_trials(client_ip)
+    return {"remaining": remaining, "needs_key": remaining == 0}
 
 
 @router.get("/{job_id}", response_model=JobResponse)

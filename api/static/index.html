@@ -340,12 +340,42 @@
           </label>
         </div>
 
+        <!-- API Key -->
+        <div class="mb-5">
+          <div class="flex items-center gap-2 mb-2">
+            <label class="block text-xs font-semibold uppercase tracking-[0.14em]"
+              :class="needsKey && !userApiKey.trim() ? 'text-accent-500' : 'text-ink-400'">
+              Together API Key
+            </label>
+            <template x-if="!trialUsed && trialRemaining > 0">
+              <span class="text-[11px] text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full font-medium">
+                <span x-text="trialRemaining"></span> free trial<span x-show="trialRemaining !== 1">s</span> left
+              </span>
+            </template>
+            <template x-if="needsKey && !userApiKey.trim()">
+              <span class="text-[11px] text-accent-500 font-medium">Required</span>
+            </template>
+          </div>
+          <input
+            x-model="userApiKey"
+            type="password"
+            :placeholder="needsKey ? 'Paste your Together API key to continue' : 'Optional — leave blank to use free trial'"
+            class="w-full bg-cream-100 border rounded-lg px-4 py-3 text-sm text-ink-800 placeholder-ink-300 focus:outline-none focus:ring-2 focus:ring-gold-300 focus:border-transparent transition"
+            :class="needsKey && !userApiKey.trim() ? 'border-accent-300 bg-accent-50/30' : 'border-cream-300'"
+            @input="localStorage.setItem('violin_api_key', userApiKey)"
+          />
+          <p class="text-[11px] text-ink-400 mt-1.5">
+            Get a key at <a href="https://api.together.ai/settings/api-keys" target="_blank" class="underline underline-offset-2 hover:text-ink-600">api.together.ai</a>
+            · your key is sent over HTTPS and never stored on our server
+          </p>
+        </div>
+
         <!-- Submit -->
         <button
           @click="submit()"
-          :disabled="!file"
+          :disabled="!file || (needsKey && !userApiKey.trim())"
           class="w-full py-3.5 px-6 rounded-full font-semibold text-sm tracking-wide transition-all duration-250 focus:outline-none focus:ring-2 focus:ring-gold-300 focus:ring-offset-2"
-          :class="file
+          :class="file && !(needsKey && !userApiKey.trim())
             ? 'bg-ink-800 hover:bg-accent-500 text-cream-100 shadow-[0_8px_28px_-12px_rgba(42,36,32,0.3)] hover:shadow-[0_8px_28px_-12px_rgba(139,46,42,0.3)] active:scale-[0.98]'
             : 'bg-cream-200 text-ink-300 cursor-not-allowed'"
         >
@@ -689,6 +719,12 @@ function app() {
     showAdvanced: false,
     uploadProgress: 0,
 
+    // API key / trial
+    userApiKey: localStorage.getItem('violin_api_key') || '',
+    trialUsed: localStorage.getItem('violin_trial_used') === 'true',
+    needsKey: false,
+    trialRemaining: -1,
+
     // job
     jobId: null,
     jobStatus: null,
@@ -777,6 +813,57 @@ function app() {
         this.languages = await res.json();
         this._autoSelectLanguage();
       } catch (_) {}
+      await this._checkTrial();
+      this._resumeJob();
+    },
+
+    async _resumeJob() {
+      const saved = localStorage.getItem('violin_job_id');
+      const savedLang = localStorage.getItem('violin_job_lang');
+      if (!saved) return;
+
+      try {
+        const res = await fetch(`/jobs/${saved}`);
+        if (!res.ok) { this._clearSavedJob(); return; }
+        const job = await res.json();
+
+        this.jobId = saved;
+        if (savedLang) this.language = savedLang;
+
+        if (job.status === 'done') {
+          this.progress = job.progress || [];
+          this.phase = 'done';
+          this.$nextTick(() => {
+            if (this.$refs.player) { this.$refs.player.load(); this.currentTime = 0; }
+          });
+          this.loadSegments();
+        } else if (job.status === 'failed') {
+          this.errorMessage = job.error || 'Translation failed.';
+          this.phase = 'error';
+          this._clearSavedJob();
+        } else {
+          this.progress = job.progress || [];
+          this.phase = 'processing';
+          this.poll();
+        }
+      } catch (_) {
+        this._clearSavedJob();
+      }
+    },
+
+    _clearSavedJob() {
+      localStorage.removeItem('violin_job_id');
+      localStorage.removeItem('violin_job_lang');
+    },
+
+    async _checkTrial() {
+      try {
+        const res = await fetch('/jobs/trial-status');
+        const data = await res.json();
+        this.trialRemaining = data.remaining;
+        this.needsKey = data.needs_key;
+        if (data.needs_key) this.trialUsed = true;
+      } catch (_) {}
     },
 
     _autoSelectLanguage() {
@@ -839,6 +926,8 @@ function app() {
 
     submit() {
       if (!this.file) return;
+      if (this.needsKey && !this.userApiKey.trim()) return;
+
       this.phase = 'uploading';
       this.uploadProgress = 0;
       this.progress = [];
@@ -851,6 +940,9 @@ function app() {
       fd.append('source_language', this.sourceLanguage);
       fd.append('subtitles', this.subtitles);
       fd.append('voiceover', this.voiceover);
+      fd.append('user_api_key', this.userApiKey.trim());
+
+      const usingOwnKey = !!this.userApiKey.trim();
 
       const xhr = new XMLHttpRequest();
 
@@ -864,8 +956,25 @@ function app() {
         if (xhr.status === 202) {
           const job = JSON.parse(xhr.responseText);
           this.jobId = job.id;
+          localStorage.setItem('violin_job_id', job.id);
+          localStorage.setItem('violin_job_lang', this.language);
           this.phase = 'processing';
+          if (!usingOwnKey) {
+            this.trialUsed = true;
+            this.needsKey = true;
+            this.trialRemaining = 0;
+            localStorage.setItem('violin_trial_used', 'true');
+          }
           this.poll();
+        } else if (xhr.status === 403) {
+          this.needsKey = true;
+          this.trialUsed = true;
+          this.trialRemaining = 0;
+          localStorage.setItem('violin_trial_used', 'true');
+          let detail = 'Free trial used. Please provide your own Together API key to continue.';
+          try { detail = JSON.parse(xhr.responseText).detail || detail; } catch (_) {}
+          this.errorMessage = detail;
+          this.phase = 'error';
         } else {
           let detail = `HTTP ${xhr.status}`;
           try { detail = JSON.parse(xhr.responseText).detail || detail; } catch (_) {}
@@ -1016,6 +1125,7 @@ function app() {
         this.$refs.player.removeAttribute('src');
         this.$refs.player.load();
       }
+      this._clearSavedJob();
       this.phase = 'upload';
       this.file = null;
       this.jobId = null;

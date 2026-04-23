@@ -12,7 +12,9 @@ Each job lives in JOBS_DIR/{job_id}/:
 from __future__ import annotations
 
 import json
+import shutil
 import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -134,12 +136,43 @@ def load_segments(job_id: str) -> list[dict[str, Any]]:
 
 def delete_job(job_id: str) -> bool:
     """Remove a job directory. Returns True if the job existed."""
-    import shutil
     job_dir = _job_dir(job_id)
     if not job_dir.exists():
         return False
     shutil.rmtree(job_dir)
     return True
+
+
+def cleanup_old_jobs(max_age_hours: float) -> int:
+    """Delete completed/failed jobs whose meta.json is older than *max_age_hours*.
+
+    Returns the number of jobs deleted. Skips running/queued jobs.
+    """
+    if max_age_hours <= 0 or not JOBS_DIR.exists():
+        return 0
+
+    cutoff = time.time() - max_age_hours * 3600
+    deleted = 0
+
+    for job_dir in JOBS_DIR.iterdir():
+        if not job_dir.is_dir():
+            continue
+        meta_file = job_dir / "meta.json"
+        if not meta_file.exists():
+            continue
+        try:
+            if meta_file.stat().st_mtime > cutoff:
+                continue
+            meta = json.loads(meta_file.read_text(encoding="utf-8"))
+            status = meta.get("status", "")
+            if status not in (JobStatus.done, JobStatus.failed, "done", "failed"):
+                continue
+            shutil.rmtree(job_dir)
+            deleted += 1
+        except Exception:
+            continue
+
+    return deleted
 
 
 def _read_meta(job_id: str) -> dict[str, Any]:
