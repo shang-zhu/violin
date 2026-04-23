@@ -1,12 +1,25 @@
-"""FFmpeg utilities — uses the imageio-ffmpeg bundled binary (no system ffmpeg required)."""
+"""FFmpeg utilities."""
 
+import os
 import re
+import shutil
 import subprocess
 
-import imageio_ffmpeg
 import soundfile as sf
 
-FFMPEG_EXE = imageio_ffmpeg.get_ffmpeg_exe()
+def _find_ffmpeg() -> str:
+    """Return the path to an ffmpeg binary, preferring system ffmpeg."""
+    system = shutil.which("ffmpeg")
+    if system:
+        return system
+    try:
+        import imageio_ffmpeg
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        pass
+    return os.environ.get("FFMPEG_PATH", "ffmpeg")
+
+FFMPEG_EXE = _find_ffmpeg()
 
 
 def get_duration_video(path: str) -> float:
