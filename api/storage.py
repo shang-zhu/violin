@@ -12,7 +12,10 @@ Each job lives in JOBS_DIR/{job_id}/:
 from __future__ import annotations
 
 import json
+import logging
+import os
 import shutil
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -21,7 +24,9 @@ from typing import Any
 from .config import JOBS_DIR
 from .models import JobResponse, JobStatus, ProgressEvent
 
-_lock = threading.Lock()  # guards directory creation; individual files use atomic writes
+logger = logging.getLogger(__name__)
+
+_lock = threading.Lock()
 
 
 def _job_dir(job_id: str) -> Path:
@@ -48,7 +53,7 @@ def create_job(job_id: str, params: dict[str, Any]) -> None:
         **params,
         "error": None,
     }
-    _meta_path(job_id).write_text(json.dumps(meta), encoding="utf-8")
+    _atomic_write(_meta_path(job_id), json.dumps(meta))
     _progress_path(job_id).write_text("", encoding="utf-8")
 
 
@@ -58,7 +63,7 @@ def update_status(job_id: str, status: JobStatus, error: str | None = None) -> N
     meta["status"] = status
     if error is not None:
         meta["error"] = error
-    _meta_path(job_id).write_text(json.dumps(meta), encoding="utf-8")
+    _atomic_write(_meta_path(job_id), json.dumps(meta))
 
 
 def append_progress(job_id: str, step: int, total: int, message: str) -> None:
@@ -74,15 +79,23 @@ def get_job(job_id: str) -> JobResponse | None:
     if not meta_path.exists():
         return None
 
-    meta = _read_meta(job_id)
+    try:
+        meta = _read_meta(job_id)
+    except (json.JSONDecodeError, OSError) as exc:
+        logger.warning("Could not read meta for job %s: %s", job_id, exc)
+        return None
 
     progress: list[ProgressEvent] = []
     progress_path = _progress_path(job_id)
     if progress_path.exists():
         for line in progress_path.read_text(encoding="utf-8").splitlines():
             line = line.strip()
-            if line:
+            if not line:
+                continue
+            try:
                 progress.append(ProgressEvent(**json.loads(line)))
+            except (json.JSONDecodeError, TypeError):
+                continue
 
     return JobResponse(
         id=meta["id"],
@@ -175,5 +188,32 @@ def cleanup_old_jobs(max_age_hours: float) -> int:
     return deleted
 
 
+def _atomic_write(path: Path, data: str) -> None:
+    """Write data to a file atomically via temp-file + rename."""
+    fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+    try:
+        os.write(fd, data.encode("utf-8"))
+        os.close(fd)
+        fd = -1
+        os.replace(tmp, path)
+    except BaseException:
+        if fd >= 0:
+            os.close(fd)
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
 def _read_meta(job_id: str) -> dict[str, Any]:
-    return json.loads(_meta_path(job_id).read_text(encoding="utf-8"))
+    """Read meta.json with a single retry in case of a partial-write race."""
+    path = _meta_path(job_id)
+    for attempt in range(3):
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            if attempt < 2:
+                time.sleep(0.05)
+            else:
+                raise
