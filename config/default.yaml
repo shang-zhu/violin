@@ -180,6 +180,7 @@ api:
   max_workers: 8
   job_ttl_hours: 24          # auto-delete completed/failed jobs older than this (0 = disable)
   free_trial_jobs: 1         # jobs allowed per IP without a user-provided API key (0 = unlimited)
+  url_upload: true           # allow users to paste video URLs (yt-dlp); set false to disable
 
 # ── Video chat ──────────────────────────────────────────────
 chat:
