@@ -265,10 +265,12 @@
 
         <!-- Advanced options toggle -->
         <button
-          class="w-full flex items-center justify-between text-xs font-semibold text-ink-400 uppercase tracking-[0.14em] mb-3 hover:text-ink-600 transition-colors"
+          class="w-full flex items-center justify-between text-xs font-semibold uppercase tracking-[0.14em] mb-3 hover:text-ink-600 transition-colors"
+          :class="needsKey && !userApiKey.trim() ? 'text-accent-500' : 'text-ink-400'"
           @click="showAdvanced = !showAdvanced"
+          x-init="if (needsKey) showAdvanced = true"
         >
-          <span>Advanced options</span>
+          <span x-text="needsKey && !userApiKey.trim() ? 'API key required — expand to add' : 'Advanced options'"></span>
           <svg class="w-4 h-4 transition-transform duration-200" :class="{ 'rotate-180': showAdvanced }" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
           </svg>
@@ -348,7 +350,7 @@
           </div>
 
           <!-- Toggles -->
-          <div class="flex gap-4">
+          <div class="flex gap-6">
             <label class="flex items-center gap-2.5 cursor-pointer select-none">
               <button
                 type="button"
@@ -362,55 +364,50 @@
               </button>
               <span class="text-xs font-medium text-ink-600">Subtitles (.srt)</span>
             </label>
-          </div>
 
-          <!-- Voice-over mode -->
-          <label class="flex items-center gap-2.5 cursor-pointer select-none">
-            <button
-              type="button"
-              class="relative w-9 h-5 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gold-300 focus:ring-offset-1"
-              :class="voiceover ? 'bg-accent-500' : 'bg-cream-300'"
-              @click="voiceover = !voiceover"
-              role="switch"
-              :aria-checked="voiceover"
-            >
-              <span class="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200" :class="voiceover ? 'translate-x-4' : 'translate-x-0'"></span>
-            </button>
-            <div>
-              <span class="text-xs font-medium text-ink-600">Voice-over mode</span>
-              <p class="text-[11px] text-ink-400 mt-0.5">Keep original audio underneath the dub</p>
-            </div>
-          </label>
-        </div>
-
-        <!-- API Key -->
-        <div class="mb-5">
-          <div class="flex items-center gap-2 mb-2">
-            <label class="block text-xs font-semibold uppercase tracking-[0.14em]"
-              :class="needsKey && !userApiKey.trim() ? 'text-accent-500' : 'text-ink-400'">
-              Together API Key
+            <label class="flex items-center gap-2.5 cursor-pointer select-none">
+              <button
+                type="button"
+                class="relative w-9 h-5 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gold-300 focus:ring-offset-1"
+                :class="voiceover ? 'bg-accent-500' : 'bg-cream-300'"
+                @click="voiceover = !voiceover"
+                role="switch"
+                :aria-checked="voiceover"
+              >
+                <span class="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200" :class="voiceover ? 'translate-x-4' : 'translate-x-0'"></span>
+              </button>
+              <span class="text-xs font-medium text-ink-600">Voice-over</span>
             </label>
-            <template x-if="!trialUsed && trialRemaining > 0">
-              <span class="text-[11px] text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full font-medium">
-                <span x-text="trialRemaining"></span> free trial<span x-show="trialRemaining !== 1">s</span> left
-              </span>
-            </template>
-            <template x-if="needsKey && !userApiKey.trim()">
-              <span class="text-[11px] text-accent-500 font-medium">Required</span>
-            </template>
           </div>
-          <input
-            x-model="userApiKey"
-            type="password"
-            :placeholder="needsKey ? 'Paste your Together API key to continue' : 'Optional — leave blank to use free trial'"
-            class="w-full bg-cream-100 border rounded-lg px-4 py-3 text-sm text-ink-800 placeholder-ink-300 focus:outline-none focus:ring-2 focus:ring-gold-300 focus:border-transparent transition"
-            :class="needsKey && !userApiKey.trim() ? 'border-accent-300 bg-accent-50/30' : 'border-cream-300'"
-            @input="localStorage.setItem('violin_api_key', userApiKey)"
-          />
-          <p class="text-[11px] text-ink-400 mt-1.5">
-            Get a key at <a href="https://api.together.ai/settings/api-keys" target="_blank" class="underline underline-offset-2 hover:text-ink-600">api.together.ai</a>
-            · your key is sent over HTTPS and never stored on our server
-          </p>
+
+          <!-- API Key -->
+          <div>
+            <div class="flex items-center gap-2 mb-1.5">
+              <label class="block text-xs font-medium text-ink-500">
+                Together API Key
+              </label>
+              <template x-if="!needsKey && trialRemaining > 0">
+                <span class="text-[11px] text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full font-medium">
+                  <span x-text="trialRemaining"></span> free trial<span x-show="trialRemaining !== 1">s</span> left
+                </span>
+              </template>
+              <template x-if="needsKey && !userApiKey.trim()">
+                <span class="text-[11px] text-accent-500 font-medium">Required</span>
+              </template>
+            </div>
+            <input
+              x-model="userApiKey"
+              type="password"
+              :placeholder="needsKey ? 'Paste your Together API key to continue' : 'Optional — leave blank to use free trial'"
+              class="w-full bg-cream-50 border rounded-lg px-3 py-2 text-sm text-ink-800 placeholder-ink-300 focus:outline-none focus:ring-2 focus:ring-gold-300 focus:border-transparent transition"
+              :class="needsKey && !userApiKey.trim() ? 'border-accent-300 bg-accent-50/30' : 'border-cream-300'"
+              @input="localStorage.setItem('violin_api_key', userApiKey)"
+            />
+            <p class="text-[11px] text-ink-400 mt-1.5">
+              Get a key at <a href="https://api.together.ai/settings/api-keys" target="_blank" class="underline underline-offset-2 hover:text-ink-600">api.together.ai</a>
+              · your key is sent over HTTPS and never stored on our server
+            </p>
+          </div>
         </div>
 
         <!-- Submit -->
@@ -939,7 +936,10 @@ function app() {
         const data = await res.json();
         this.trialRemaining = data.remaining;
         this.needsKey = data.needs_key;
-        if (data.needs_key) this.trialUsed = true;
+        if (data.needs_key) {
+          this.trialUsed = true;
+          if (!this.userApiKey.trim()) this.showAdvanced = true;
+        }
       } catch (_) {}
     },
 
