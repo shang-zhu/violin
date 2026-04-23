@@ -310,20 +310,6 @@
               <button
                 type="button"
                 class="relative w-9 h-5 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gold-300 focus:ring-offset-1"
-                :class="diarize ? 'bg-accent-500' : 'bg-cream-300'"
-                @click="diarize = !diarize"
-                role="switch"
-                :aria-checked="diarize"
-              >
-                <span class="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200" :class="diarize ? 'translate-x-4' : 'translate-x-0'"></span>
-              </button>
-              <span class="text-xs font-medium text-ink-600">Speaker diarization</span>
-            </label>
-
-            <label class="flex items-center gap-2.5 cursor-pointer select-none">
-              <button
-                type="button"
-                class="relative w-9 h-5 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gold-300 focus:ring-offset-1"
                 :class="subtitles ? 'bg-accent-500' : 'bg-cream-300'"
                 @click="subtitles = !subtitles"
                 role="switch"
@@ -697,7 +683,6 @@ function app() {
     voiceMatching: false,
     voiceMatchError: '',
     sourceLanguage: 'auto-detect',
-    diarize: false,
     subtitles: true,
     voiceover: true,
     origAudioVolume: 0.1,
@@ -864,7 +849,6 @@ function app() {
       fd.append('language', this.language);
       fd.append('voice', this.voice);
       fd.append('source_language', this.sourceLanguage);
-      fd.append('diarize', this.diarize);
       fd.append('subtitles', this.subtitles);
       fd.append('voiceover', this.voiceover);
 

@@ -13,8 +13,8 @@ from . import config as _conf
 from .extractor import split_audio
 
 _MAX_RETRIES = 3
-_RETRY_BACKOFF = [5, 15, 30]  # seconds — generous for long diarization requests
-_TIMEOUT = 600  # 10 minutes — diarization on long audio can take a while
+_RETRY_BACKOFF = [5, 15, 30]
+_TIMEOUT = 600
 _DEFAULT_TRANSCRIBE_WORKERS = 2
 
 # Whisper hallucinates these patterns on music, silence, and noise.
@@ -133,13 +133,8 @@ def _transcribe_single(
     audio_path: str,
     client: Together,
     model: str,
-    diarize: bool = False,
 ) -> list[Segment]:
     """Transcribe a single audio file (must be small enough for the API)."""
-    extra_kwargs: dict = {}
-    if diarize:
-        extra_kwargs["diarize"] = "true"
-
     response = None
     for attempt in range(_MAX_RETRIES):
         try:
@@ -149,7 +144,6 @@ def _transcribe_single(
                     model=model,
                     response_format="verbose_json",
                     timeout=_TIMEOUT,
-                    **extra_kwargs,
                 )
             break
         except (httpx.ReadTimeout, httpx.TimeoutException) as exc:
@@ -179,22 +173,6 @@ def _transcribe_single(
         for i, s in enumerate(valid)
     ]
 
-    if diarize:
-        speaker_segs = getattr(response, "speaker_segments", None) or []
-        turns = [
-            (_g(ss, "start"), _g(ss, "end"), _g(ss, "speaker_id", "SPEAKER_00"))
-            for ss in speaker_segs
-        ]
-        if turns:
-            for seg in segments:
-                overlap: dict[str, float] = {}
-                for t_start, t_end, spk in turns:
-                    o = min(seg.end, t_end) - max(seg.start, t_start)
-                    if o > 0:
-                        overlap[spk] = overlap.get(spk, 0) + o
-                if overlap:
-                    seg.speaker = max(overlap, key=overlap.get)
-
     return segments
 
 
@@ -221,7 +199,6 @@ def _dedup_overlap(segments: list[Segment]) -> list[Segment]:
 def transcribe(
     audio_path: str,
     client: Together,
-    diarize: bool = False,
 ) -> list[Segment]:
     """Return clean, timestamped segments from audio file.
 
@@ -238,13 +215,13 @@ def transcribe(
 
     if len(chunks) == 1:
         print(f"      Transcribing single file…")
-        return _transcribe_single(audio_path, client, model, diarize)
+        return _transcribe_single(audio_path, client, model)
 
     print(f"      Audio split into {len(chunks)} chunks, transcribing in parallel…")
     results: dict[int, list[Segment]] = {}
 
     def _do(idx: int, chunk_path: str, offset: float) -> tuple[int, list[Segment]]:
-        segs = _transcribe_single(chunk_path, client, model, diarize)
+        segs = _transcribe_single(chunk_path, client, model)
         for s in segs:
             s.start += offset
             s.end += offset
@@ -271,11 +248,3 @@ def transcribe(
     return all_segments
 
 
-def find_main_speaker(segments: list[Segment]) -> str:
-    """Return the speaker_id with the longest total speaking duration."""
-    durations: dict[str, float] = {}
-    for seg in segments:
-        durations[seg.speaker] = durations.get(seg.speaker, 0) + (seg.end - seg.start)
-    if not durations:
-        return "SPEAKER_00"
-    return max(durations, key=durations.get)

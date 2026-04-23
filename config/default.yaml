@@ -35,7 +35,6 @@ tts:
 
 # ── Pipeline defaults ───────────────────────────────────────────
 pipeline:
-  diarize: false
   style: "standard"      # default style profile (see "styles" section below)
   voice_gender: "male"   # "male" or "female" — picks the default native voice
 
