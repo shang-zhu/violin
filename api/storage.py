@@ -121,6 +121,10 @@ def output_video_path(job_id: str) -> Path:
     return _job_dir(job_id) / "output.mp4"
 
 
+def voiceover_video_path(job_id: str) -> Path:
+    return _job_dir(job_id) / "output_voiceover.mp4"
+
+
 def output_srt_path(job_id: str) -> Path:
     return _job_dir(job_id) / "output.srt"
 

@@ -25,6 +25,7 @@ dependencies = [
     "python-multipart>=0.0.22",
     "pyyaml>=6.0.3",
     "soundfile>=0.13.1",
+    "openai>=1.0.0",
     "together>=2.5.0",
     "uvicorn>=0.42.0",
     "yt-dlp>=2025.1.0",
