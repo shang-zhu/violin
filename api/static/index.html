@@ -395,14 +395,23 @@
                 <span class="text-[11px] text-accent-500 font-medium">Required</span>
               </template>
             </div>
-            <input
-              x-model="userApiKey"
-              type="password"
-              :placeholder="needsKey ? 'Paste your Together API key to continue' : 'Optional — leave blank to use free trial'"
-              class="w-full bg-cream-50 border rounded-lg px-3 py-2 text-sm text-ink-800 placeholder-ink-300 focus:outline-none focus:ring-2 focus:ring-gold-300 focus:border-transparent transition"
-              :class="needsKey && !userApiKey.trim() ? 'border-accent-300 bg-accent-50/30' : 'border-cream-300'"
-              @input="localStorage.setItem('violin_api_key', userApiKey)"
-            />
+            <div class="relative">
+              <input
+                x-model="userApiKey"
+                type="password"
+                :placeholder="needsKey ? 'Paste your Together API key to continue' : 'Optional — leave blank to use free trial'"
+                class="w-full bg-cream-50 border rounded-lg px-3 py-2 pr-16 text-sm text-ink-800 placeholder-ink-300 focus:outline-none focus:ring-2 focus:ring-gold-300 focus:border-transparent transition"
+                :class="needsKey && !userApiKey.trim() ? 'border-accent-300 bg-accent-50/30' : 'border-cream-300'"
+                @input="localStorage.setItem('violin_api_key', userApiKey)"
+              />
+              <template x-if="userApiKey">
+                <button
+                  type="button"
+                  @click="clearApiKey()"
+                  class="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-ink-400 hover:text-accent-500 underline underline-offset-2 px-1.5 py-0.5"
+                >Clear</button>
+              </template>
+            </div>
             <p class="text-[11px] text-ink-400 mt-1.5">
               Get a key at <a href="https://api.together.ai/settings/api-keys" target="_blank" class="underline underline-offset-2 hover:text-ink-600">api.together.ai</a>
               · your key is sent over HTTPS and never stored on our server
@@ -575,9 +584,9 @@
             </div>
           </div>
 
-          <div class="flex gap-2.5 ml-auto">
+          <div class="flex flex-wrap gap-2.5 ml-auto">
             <a
-              :href="`/jobs/${jobId}/video`"
+              :href="voiceover ? `/jobs/${jobId}/video-voiceover?volume=${origAudioVolume}` : `/jobs/${jobId}/video`"
               class="flex items-center justify-center gap-2 py-2.5 px-5 bg-ink-800 hover:bg-accent-500 text-cream-100 rounded-full font-semibold text-sm shadow-[0_8px_28px_-12px_rgba(42,36,32,0.25)] transition-all duration-200 active:scale-[0.98]"
               download
             >
@@ -942,6 +951,17 @@ function app() {
       localStorage.removeItem('violin_job_lang');
     },
 
+    clearApiKey() {
+      this.userApiKey = '';
+      localStorage.removeItem('violin_api_key');
+    },
+
+    _isInvalidKeyError(msg) {
+      if (!msg) return false;
+      const m = msg.toLowerCase();
+      return m.includes('401') || m.includes('invalid api key') || m.includes('invalid_api_key') || m.includes('unauthorized');
+    },
+
     async _checkTrial() {
       try {
         const res = await fetch('/jobs/trial-status');
@@ -1144,6 +1164,11 @@ function app() {
           this.loadSegments();
         } else if (job.status === 'failed') {
           this.errorMessage = job.error || 'Translation failed.';
+          if (this._isInvalidKeyError(this.errorMessage) && this.userApiKey) {
+            this.clearApiKey();
+            this.errorMessage = 'Your API key is invalid or expired — it has been cleared. Please enter a new one or use the free trial.';
+            this._checkTrial();
+          }
           this.phase = 'error';
         } else if (job.status === 'cancelled') {
           this._clearSavedJob();
