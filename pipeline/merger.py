@@ -54,12 +54,14 @@ def _make_speech_chunk(
     tts_dur: float | None = None,
     voiceover: bool = False,
     mix_volume: float = 0.0,
+    no_audio: bool = False,
 ) -> None:
     """Extract video segment, speed-adjust to match TTS duration, mux with TTS audio.
 
     *voiceover*: TTS-only in the video; caller builds original audio separately.
     *mix_volume*: bake original audio into the video at this level (0.0–1.0).
-    Only one of voiceover / mix_volume should be used.
+    *no_audio*: produce video stream only — caller will build a single audio
+    track and mux it once at the end (avoids per-chunk AAC quantization drift).
     """
     vcfg = _conf.get()["merge_video"]
     if fps is None:
@@ -75,6 +77,23 @@ def _make_speech_chunk(
 
     coarse = max(0, start - _SEEK_PAD)
     fine = start - coarse
+
+    if no_audio:
+        filter_complex = (
+            f"[0:v]trim=start={fine}:duration={orig_dur},setpts=(PTS-STARTPTS)/{speed},fps=fps={fps}[v]"
+        )
+        subprocess.run([
+            FFMPEG_EXE,
+            "-ss", str(coarse), "-t", str(orig_dur + fine + 0.5), "-i", video_path,
+            "-filter_complex", filter_complex,
+            "-map", "[v]",
+            "-c:v", "libx264", "-preset", vcfg["preset"], "-crf", str(vcfg["crf"]),
+            "-an",
+            "-t", str(target_dur),
+            "-f", "mpegts",
+            "-y", out_path,
+        ], check=True, capture_output=True)
+        return
 
     vol = max(0.0, min(1.0, mix_volume))
     if vol > 0 and not voiceover:
@@ -110,7 +129,7 @@ def _make_speech_chunk(
 
 def _make_orig_audio_chunk(
     video_path: str, start: float, end: float,
-    out_path: str, speed: float = 1.0,
+    out_path: str, speed: float = 1.0, volume: float = 1.0,
 ) -> None:
     """Extract original audio from a video segment, speed-adjusted, as raw WAV."""
     orig_dur = end - start
@@ -121,6 +140,8 @@ def _make_orig_audio_chunk(
     af_parts = [f"atrim=start={fine}:duration={orig_dur}", "asetpts=PTS-STARTPTS"]
     if atempo:
         af_parts.append(atempo)
+    if volume != 1.0:
+        af_parts.append(f"volume={volume}")
     af = ",".join(af_parts)
 
     subprocess.run([
@@ -149,12 +170,14 @@ def _make_gap_chunk(
     out_path: str, fps: float | None = None,
     preserve_audio: bool = False,
     volume: float = 1.0,
+    no_audio: bool = False,
 ) -> None:
     """Extract gap video at original speed.
 
     When *preserve_audio* is True the original audio track is kept (used to
     retain non-translated speakers).  *volume* (0.0–1.0) controls the audio
     level of preserved audio.  Otherwise the audio is replaced with silence.
+    *no_audio*: produce video only; the caller builds the audio separately.
     """
     vcfg = _conf.get()["merge_video"]
     if fps is None:
@@ -162,6 +185,21 @@ def _make_gap_chunk(
     dur = end - start
     coarse = max(0, start - _SEEK_PAD)
     fine = start - coarse
+
+    if no_audio:
+        subprocess.run([
+            FFMPEG_EXE,
+            "-ss", str(coarse), "-t", str(dur + fine + 0.5), "-i", video_path,
+            "-filter_complex",
+            f"[0:v]trim=start={fine}:duration={dur},setpts=PTS-STARTPTS,fps=fps={fps}[v]",
+            "-map", "[v]",
+            "-c:v", "libx264", "-preset", vcfg["preset"], "-crf", str(vcfg["crf"]),
+            "-an",
+            "-t", str(dur),
+            "-f", "mpegts",
+            "-y", out_path,
+        ], check=True, capture_output=True)
+        return
 
     if preserve_audio:
         vol_filter = f",volume={volume}" if volume < 1.0 else ""
@@ -226,19 +264,25 @@ def prepare_merge(
     tmp_dir = Path(tempfile.mkdtemp(prefix="vidmerge_"))
     fps = _probe_fps(video_path)
 
+    # When mix_volume == 0 we build a single video audio track at the end
+    # (concat PCM → AAC once) instead of encoding audio per chunk. This avoids
+    # ~5–15 ms of AAC frame rounding per chunk that would otherwise accumulate
+    # to a 1–2 s lag between TTS audio and subtitles in long videos.
+    no_audio = mix_volume == 0
+
     gap_tasks: list[tuple] = []
     prev_end = 0.0
     for i, seg in enumerate(segments):
         gap = seg.start - prev_end
         if gap > min_gap:
             gap_path = str(tmp_dir / f"gap_{i:05d}.ts")
-            gap_tasks.append((video_path, prev_end, seg.start, gap_path, fps, preserve_gap_audio, gap_volume))
+            gap_tasks.append((video_path, prev_end, seg.start, gap_path, fps, preserve_gap_audio, gap_volume, no_audio))
         prev_end = seg.end
 
     trail = total_duration - prev_end
     if trail > min_gap:
         trail_path = str(tmp_dir / "trail.ts")
-        gap_tasks.append((video_path, prev_end, total_duration, trail_path, fps, preserve_gap_audio, gap_volume))
+        gap_tasks.append((video_path, prev_end, total_duration, trail_path, fps, preserve_gap_audio, gap_volume, no_audio))
 
     return MergePlan(
         video_path=video_path,
@@ -251,6 +295,7 @@ def prepare_merge(
         original_audio_volume=original_audio_volume,
         mix_volume=mix_volume,
         gap_volume=gap_volume,
+        no_audio=no_audio,
     )
 
 
@@ -270,11 +315,11 @@ class MergePlan:
     """Holds pre-computed merge metadata so gap chunks can be built early."""
     __slots__ = ("video_path", "segments", "total_duration", "fps", "tmp_dir",
                  "gap_tasks", "preserve_gap_audio", "original_audio_volume",
-                 "mix_volume", "gap_volume")
+                 "mix_volume", "gap_volume", "no_audio")
 
     def __init__(self, video_path, segments, total_duration, fps, tmp_dir,
                  gap_tasks, preserve_gap_audio=False, original_audio_volume=0.0,
-                 mix_volume=0.0, gap_volume=1.0):
+                 mix_volume=0.0, gap_volume=1.0, no_audio=False):
         self.video_path = video_path
         self.segments = segments
         self.total_duration = total_duration
@@ -285,6 +330,7 @@ class MergePlan:
         self.original_audio_volume = original_audio_volume
         self.mix_volume = mix_volume
         self.gap_volume = gap_volume
+        self.no_audio = no_audio
 
 
 def build_aligned_video(
@@ -321,6 +367,7 @@ def build_aligned_video(
         voiceover = merge_plan.original_audio_volume > 0
         mix_vol = merge_plan.mix_volume
         gap_vol = merge_plan.gap_volume
+        no_audio = merge_plan.no_audio
     else:
         tmp_dir = Path(tempfile.mkdtemp(prefix="vidmerge_"))
         fps = _probe_fps(video_path)
@@ -329,12 +376,16 @@ def build_aligned_video(
         voiceover = False
         mix_vol = 0.0
         gap_vol = 1.0
+        no_audio = mix_vol == 0
 
     print(f"      Source fps: {fps}")
 
     chunks: list[tuple[str, tuple]] = []
     # (type, out_path, duration, speed) — metadata for building the original audio track
     audio_plan: list[tuple[str, float, float, float, float]] = []
+    # Per-entry plan for the video's main audio track, built once at the end
+    # to avoid per-chunk AAC quantization drift.
+    video_audio_plan: list[tuple] = []
     new_segments: list[Segment] = []
     new_time = 0.0
     prev_end = 0.0
@@ -343,13 +394,18 @@ def build_aligned_video(
         gap = seg.start - prev_end
         if gap > min_gap:
             gap_path = str(tmp_dir / f"gap_{i:05d}.ts")
-            chunks.append(("gap", (video_path, prev_end, seg.start, gap_path, fps, preserve_audio, gap_vol)))
+            chunks.append(("gap", (video_path, prev_end, seg.start, gap_path, fps, preserve_audio, gap_vol, no_audio)))
             audio_plan.append(("silence", prev_end, seg.start, gap, 1.0))
+            if no_audio:
+                if preserve_audio:
+                    video_audio_plan.append(("orig_gap", prev_end, seg.start, gap_vol))
+                else:
+                    video_audio_plan.append(("silence_va", gap))
             new_time += gap
 
         tts_dur = tts_durations[i] if tts_durations else get_duration_video(tts_path)
         speech_path = str(tmp_dir / f"seg_{i:05d}.ts")
-        chunks.append(("speech", (video_path, seg.start, seg.end, tts_path, speech_path, fps, tts_dur, voiceover, mix_vol)))
+        chunks.append(("speech", (video_path, seg.start, seg.end, tts_path, speech_path, fps, tts_dur, voiceover, mix_vol, no_audio)))
 
         orig_dur = seg.end - seg.start
         if orig_dur < 0.01 or tts_dur < 0.01:
@@ -360,6 +416,8 @@ def build_aligned_video(
         chunk_dur = orig_dur / clamped_speed
 
         audio_plan.append(("speech", seg.start, seg.end, chunk_dur, clamped_speed))
+        if no_audio:
+            video_audio_plan.append(("tts", tts_path, chunk_dur))
 
         new_start = new_time
         new_time += chunk_dur
@@ -372,8 +430,13 @@ def build_aligned_video(
     trail = total_duration - prev_end
     if trail > min_gap:
         trail_path = str(tmp_dir / "trail.ts")
-        chunks.append(("gap", (video_path, prev_end, total_duration, trail_path, fps, preserve_audio, gap_vol)))
+        chunks.append(("gap", (video_path, prev_end, total_duration, trail_path, fps, preserve_audio, gap_vol, no_audio)))
         audio_plan.append(("silence", prev_end, total_duration, trail, 1.0))
+        if no_audio:
+            if preserve_audio:
+                video_audio_plan.append(("orig_gap", prev_end, total_duration, gap_vol))
+            else:
+                video_audio_plan.append(("silence_va", trail))
 
     chunks_to_build = (
         [c for c in chunks if c[0] != "gap"] if gaps_already_built else chunks
@@ -411,20 +474,114 @@ def build_aligned_video(
             else:
                 f.write(f"file '{args[4]}'\n")
 
-    print("      Concatenating chunks...")
-    subprocess.run([
-        FFMPEG_EXE,
-        "-f", "concat", "-safe", "0", "-i", concat_file,
-        "-c", "copy",
-        "-movflags", "+faststart",
-        "-y", output_path,
-    ], check=True, capture_output=True)
+    if no_audio:
+        print("      Concatenating video chunks (video only)...")
+        intermediate_video = str(tmp_dir / "video_only.ts")
+        subprocess.run([
+            FFMPEG_EXE,
+            "-f", "concat", "-safe", "0", "-i", concat_file,
+            "-c", "copy",
+            "-an",
+            "-y", intermediate_video,
+        ], check=True, capture_output=True)
+
+        video_audio_path = str(tmp_dir / "video_audio.m4a")
+        _build_video_audio_track(video_audio_plan, video_path, tmp_dir,
+                                 video_audio_path, chunk_workers)
+
+        print("      Muxing video and audio...")
+        subprocess.run([
+            FFMPEG_EXE,
+            "-i", intermediate_video,
+            "-i", video_audio_path,
+            "-c:v", "copy",
+            "-c:a", "copy",
+            "-map", "0:v:0",
+            "-map", "1:a:0",
+            "-movflags", "+faststart",
+            "-y", output_path,
+        ], check=True, capture_output=True)
+    else:
+        print("      Concatenating chunks...")
+        subprocess.run([
+            FFMPEG_EXE,
+            "-f", "concat", "-safe", "0", "-i", concat_file,
+            "-c", "copy",
+            "-movflags", "+faststart",
+            "-y", output_path,
+        ], check=True, capture_output=True)
 
     if original_audio_path and (voiceover or mix_vol > 0):
         _build_original_audio_track(video_path, audio_plan, tmp_dir,
                                     original_audio_path, chunk_workers)
 
     return new_segments
+
+
+def _build_video_audio_track(
+    video_audio_plan: list[tuple],
+    video_path: str,
+    tmp_dir: Path,
+    output_path: str,
+    workers: int,
+) -> None:
+    """Build the video's main audio track in one pass: concat PCM → AAC once.
+
+    Each entry is rendered as a precise PCM WAV; the WAVs are concatenated
+    into a single stream and encoded to AAC exactly once. This avoids the
+    per-chunk AAC frame quantization (~5–15 ms each) that would otherwise
+    accumulate to a noticeable lag between TTS audio and subtitles in long
+    videos.
+    """
+    print("      Building video audio track…")
+
+    def _build_one(idx: int, entry: tuple) -> str:
+        out = str(tmp_dir / f"va_{idx:05d}.wav")
+        atype = entry[0]
+        if atype == "silence_va":
+            duration = entry[1]
+            _make_silence_audio_chunk(duration, out)
+        elif atype == "orig_gap":
+            _, start, end, volume = entry
+            _make_orig_audio_chunk(video_path, start, end, out, speed=1.0, volume=volume)
+        else:  # "tts"
+            _, tts_path, target_dur = entry
+            # Re-encode TTS to PCM @ _SAMPLE_RATE; pad/cut to exactly target_dur
+            # so the audio matches the speed-adjusted video chunk length.
+            subprocess.run([
+                FFMPEG_EXE,
+                "-i", tts_path,
+                "-af", f"apad=whole_dur={target_dur}",
+                "-c:a", "pcm_s16le", "-ar", str(_SAMPLE_RATE), "-ac", "1",
+                "-t", str(target_dur),
+                "-y", out,
+            ], check=True, capture_output=True)
+        return out
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(_build_one, i, e): i
+                   for i, e in enumerate(video_audio_plan)}
+        results: dict[int, str] = {}
+        for f in as_completed(futures):
+            idx = futures[f]
+            results[idx] = f.result()
+
+    audio_chunks = [results[i] for i in range(len(video_audio_plan))]
+
+    concat_file = str(tmp_dir / "va_concat.txt")
+    with open(concat_file, "w") as f:
+        for path in audio_chunks:
+            f.write(f"file '{path}'\n")
+
+    subprocess.run([
+        FFMPEG_EXE,
+        "-f", "concat", "-safe", "0", "-i", concat_file,
+        "-c:a", "aac", "-ar", str(_SAMPLE_RATE), "-ac", "1",
+        "-movflags", "+faststart",
+        "-vn",
+        "-y", output_path,
+    ], check=True, capture_output=True)
+    print("      Video audio track ready.")
 
 
 def _build_original_audio_track(

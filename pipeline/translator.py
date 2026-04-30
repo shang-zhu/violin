@@ -35,6 +35,14 @@ import prompts as _prompts
 def _tcfg() -> dict:
     return _conf.get()["translation"]
 
+
+def _asr_corrections_block() -> str:
+    corrections = _tcfg().get("asr_corrections") or []
+    if not corrections:
+        return ""
+    lines = "\n".join(f"  - {c}" for c in corrections)
+    return f"\nASR correction hints (the speech recogniser may have mistranscribed these — fix them during translation):\n{lines}\n"
+
 BATCH_SCHEMA = {
     "type": "object",
     "properties": {
@@ -107,6 +115,7 @@ def _translate_single(
         target_language=target_language,
         text=json.dumps(text, ensure_ascii=False),
         style_directives=style_directives,
+        asr_corrections_block=_asr_corrections_block(),
     )
     if style_directives:
         system_msg = _prompts.load("translate", "single_system_styled", **fmt)
@@ -171,6 +180,7 @@ def _try_batch(
         num_segments=len(texts),
         numbered_segments=numbered,
         style_directives=style_directives,
+        asr_corrections_block=_asr_corrections_block(),
     )
     if style_directives:
         system_msg = _prompts.load("translate", "batch_system_styled", **fmt)

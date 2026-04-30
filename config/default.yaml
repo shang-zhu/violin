@@ -5,8 +5,10 @@
 models:
   transcription: "openai/whisper-large-v3"
   translation:
-    provider: together #openai          # "openai" or "together"
-    model: google/gemma-4-31B-it #gpt-5.4-mini
+    provider: together                  # "openai" or "together"
+    model: Qwen/Qwen3.5-397B-A17B
+    # provider: openai
+    # model: gpt-5.4-mini
   tts: "cartesia/sonic-3"
   video_chat: "Qwen/Qwen3.5-397B-A17B"
 
@@ -28,10 +30,17 @@ translation:
   max_retries: 3
   temperature: 0.3
   debug_dir: "translate_debug"
+  # ASR correction hints — tell the LLM about known transcription errors so it can fix
+  # them during translation. Format: "wrong → correct (context)".
+  asr_corrections:
+    - "03 → o3 (OpenAI model name, e.g. o3-mini)"
+    - "04 → o4 (OpenAI model name, e.g. o4-mini)"
+    - "01 → o1 (OpenAI model name)"
 
 # ── TTS ─────────────────────────────────────────────────────
 tts:
   workers: 1
+  tail_silence_ms: 80   # silence appended to each TTS clip to soften segment boundaries
 
 # ── Pipeline defaults ───────────────────────────────────────────
 pipeline:

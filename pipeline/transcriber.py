@@ -30,7 +30,15 @@ _HALLUCINATION_RE = re.compile(
     re.IGNORECASE,
 )
 
-_SENTENCE_END_RE = re.compile(r'[.!?。！？…]\s*$')
+_SENTENCE_END_RE = re.compile(r'[.!?。！？]\s*$')
+
+# A segment starting with a lowercase letter or a single uppercase letter followed
+# by a space/CJK character is almost certainly a mid-word fragment from a Whisper
+# internal split (e.g. "B model" from "120B model").
+_FRAGMENT_START_RE = re.compile(r'^[a-z]|^[A-Z][\s一-鿿]')
+
+_SENTENCE_SPLIT_RE = re.compile(r'[^.!?。！？]*[.!?。！？]+(?!\d)\s*')
+_PROTECTED_PERIOD = re.compile(r'(?<=\w)\.(?=\w)')  # decimal / abbreviation: 2.0, e.g, U.S
 
 # Minimum speech duration — shorter segments are almost always noise
 _MIN_DURATION = 0.8  # seconds
@@ -49,6 +57,26 @@ class Segment:
     end: float
     text: str
     speaker: str = "SPEAKER_00"
+
+
+def _deduplicate_fragment(prev_text: str, frag_text: str) -> str:
+    """Remove the overlapping prefix from frag_text that already appears at the end of prev_text.
+
+    Whisper repeats the last few words of an internal chunk at the start of the
+    next chunk. Detect the overlap via case-insensitive character matching and
+    strip the duplicate prefix before merging.
+    """
+    prev = prev_text.rstrip('.!?。！？ ')
+    frag = frag_text.lstrip()
+    prev_lower = prev.lower()
+    frag_lower = frag.lower()
+
+    for length in range(min(len(prev), len(frag)), 1, -1):
+        if prev_lower.endswith(frag_lower[:length]):
+            remainder = frag[length:].lstrip(' ,，;；')
+            return remainder if remainder.strip() else frag_text
+
+    return frag_text
 
 
 def merge_continuous_segments(
@@ -77,14 +105,17 @@ def merge_continuous_segments(
         gap = seg.start - current.end
         same_speaker = seg.speaker == current.speaker
         ends_sentence = bool(_SENTENCE_END_RE.search(current.text))
+        next_is_fragment = bool(_FRAGMENT_START_RE.match(seg.text.strip()))
         would_be_too_long = (seg.end - current.start) > max_duration
 
-        if same_speaker and gap <= max_gap and not ends_sentence and not would_be_too_long:
+        if same_speaker and gap <= max_gap and (not ends_sentence or next_is_fragment) and not would_be_too_long:
+            seg_text = _deduplicate_fragment(current.text, seg.text) if next_is_fragment else seg.text
+            merged_text = (current.text + " " + seg_text).strip() if seg_text.strip() else current.text
             current = Segment(
                 id=current.id,
                 start=current.start,
                 end=seg.end,
-                text=current.text + " " + seg.text,
+                text=merged_text,
                 speaker=current.speaker,
             )
         else:
@@ -129,6 +160,44 @@ def _g(s: dict | object, key: str, default=None):
     return getattr(s, key, default)
 
 
+def _split_words_into_sentences(words: list, offset: float = 0.0) -> list[Segment]:
+    """Build sentence-level Segment objects from word-level timestamps.
+
+    Words are grouped into sentences by detecting sentence-ending punctuation.
+    Each sentence gets the exact start/end timestamp from the word data,
+    eliminating the need for character-proportional estimation.
+    """
+    if not words:
+        return []
+
+    sentences: list[Segment] = []
+    current_words: list = []
+
+    for w in words:
+        word = _g(w, "word") or ""
+        if not word.strip():
+            continue
+        current_words.append(w)
+        # Sentence ends when the word ends with terminal punctuation.
+        if re.search(r'[.!?。！？]\s*$', word.rstrip()):
+            start = _g(current_words[0], "start") + offset
+            end = _g(current_words[-1], "end") + offset
+            text = " ".join((_g(w2, "word") or "").strip() for w2 in current_words).strip()
+            if text:
+                sentences.append(Segment(id=len(sentences), start=start, end=end, text=text))
+            current_words = []
+
+    # Flush any trailing words that didn't end with punctuation.
+    if current_words:
+        start = _g(current_words[0], "start") + offset
+        end = _g(current_words[-1], "end") + offset
+        text = " ".join((_g(w2, "word") or "").strip() for w2 in current_words).strip()
+        if text:
+            sentences.append(Segment(id=len(sentences), start=start, end=end, text=text))
+
+    return sentences
+
+
 def _transcribe_single(
     audio_path: str,
     client: Together,
@@ -143,6 +212,7 @@ def _transcribe_single(
                     file=(Path(audio_path).name, f),
                     model=model,
                     response_format="verbose_json",
+                    timestamp_granularities=["word", "segment"],
                     timeout=_TIMEOUT,
                 )
             break
@@ -167,13 +237,16 @@ def _transcribe_single(
 
     assert response is not None
 
+    words = getattr(response, "words", None) or []
+    if words:
+        return _split_words_into_sentences(words)
+
+    # Fallback: no word timestamps available, use segment-level.
     valid = [s for s in response.segments if _is_valid(s)]
-    segments = [
+    return [
         Segment(id=i, start=_g(s, "start"), end=_g(s, "end"), text=_g(s, "text").strip())
         for i, s in enumerate(valid)
     ]
-
-    return segments
 
 
 def _dedup_overlap(segments: list[Segment]) -> list[Segment]:
@@ -247,4 +320,49 @@ def transcribe(
 
     return all_segments
 
+
+def split_into_sentences(segments: list[Segment]) -> list[Segment]:
+    """Split each segment into sentence-level sub-segments for precise subtitle timing.
+
+    Time is distributed across sentences proportionally by character count — a
+    reasonable proxy for speech duration. After TTS, each sentence chunk gets its
+    own speed-adjusted video slice, giving subtitles that match actual speech.
+    """
+    result: list[Segment] = []
+
+    _PLACEHOLDER = "\x00"
+
+    for seg in segments:
+        # Protect periods that are NOT sentence boundaries (decimals, abbreviations).
+        protected = _PROTECTED_PERIOD.sub(_PLACEHOLDER, seg.text)
+        parts = _SENTENCE_SPLIT_RE.findall(protected)
+        covered = "".join(parts)
+        remainder = protected[len(covered):].strip()
+        if remainder:
+            parts.append(remainder)
+        # Restore protected periods and strip whitespace.
+        parts = [p.replace(_PLACEHOLDER, ".").strip() for p in parts if p.strip()]
+
+        if len(parts) <= 1:
+            result.append(seg)
+            continue
+
+        total_chars = sum(len(p) for p in parts)
+        dur = seg.end - seg.start
+        t = seg.start
+        for part in parts:
+            part_dur = dur * (len(part) / total_chars)
+            result.append(Segment(
+                id=0,
+                start=t,
+                end=t + part_dur,
+                text=part,
+                speaker=seg.speaker,
+            ))
+            t += part_dur
+
+    for i, seg in enumerate(result):
+        seg.id = i
+
+    return result
 
