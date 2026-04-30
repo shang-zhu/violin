@@ -18,7 +18,7 @@ from pipeline.languages import language_code
 from pipeline.llm_client import make_translation_client
 from pipeline.merger import build_aligned_video, build_gap_chunks, generate_srt, prepare_merge
 from pipeline.styles import resolve as resolve_style
-from pipeline.transcriber import merge_continuous_segments, transcribe
+from pipeline.transcriber import merge_continuous_segments, split_into_sentences, transcribe
 from pipeline.translator import translate_segments
 from pipeline.tts import native_voices_for, synthesize_segments
 
@@ -60,10 +60,15 @@ def _progress(job_id: str, step: int, message: str) -> None:
     append_progress(job_id, step, TOTAL_STEPS, message)
 
 
-def _run_job(job_id: str, params: dict, api_key_override: str | None = None) -> None:
+def _run_job(
+    job_id: str,
+    params: dict,
+    together_key_override: str | None = None,
+    openai_key_override: str | None = None,
+) -> None:
     update_status(job_id, JobStatus.running)
 
-    api_key = api_key_override or os.environ.get("TOGETHER_API_KEY")
+    api_key = together_key_override or os.environ.get("TOGETHER_API_KEY")
     if not api_key:
         update_status(job_id, JobStatus.failed, "No API key available. Please provide your own Together API key.")
         return
@@ -82,7 +87,11 @@ def _run_job(job_id: str, params: dict, api_key_override: str | None = None) -> 
 
         client = Together(api_key=api_key)
         cfg = pipeline_config.get()
-        translation_client = make_translation_client(cfg, api_key_override=api_key)
+        translation_client = make_translation_client(
+            cfg,
+            together_key_override=together_key_override,
+            openai_key_override=openai_key_override,
+        )
         tmp_dir = Path(tempfile.mkdtemp(prefix=f"vidtrans_{job_id}_"))
 
         try:
@@ -107,7 +116,8 @@ def _run_job(job_id: str, params: dict, api_key_override: str | None = None) -> 
                 style_directives=style.translation_directives,
                 style_temperature=style.temperature,
             )
-            translated = merge_continuous_segments(translated)
+            translated = merge_continuous_segments(translated, max_duration=float("inf"))
+            translated = split_into_sentences(translated)
 
             _check_cancelled(job_id)
             effective_voice = voice or native_voices_for(lang_code)[0]
@@ -209,7 +219,13 @@ def _download_url(job_id: str, url: str) -> Path:
     raise FileNotFoundError("yt-dlp download succeeded but no input file found.")
 
 
-def _run_url_job(job_id: str, params: dict, url: str, api_key_override: str | None = None) -> None:
+def _run_url_job(
+    job_id: str,
+    params: dict,
+    url: str,
+    together_key_override: str | None = None,
+    openai_key_override: str | None = None,
+) -> None:
     """Download video from URL, then run the normal translation pipeline."""
     update_status(job_id, JobStatus.running)
     _progress(job_id, 1, "Downloading video from URL…")
@@ -220,14 +236,27 @@ def _run_url_job(job_id: str, params: dict, url: str, api_key_override: str | No
         update_status(job_id, JobStatus.failed, f"Download failed: {exc}")
         return
 
-    _run_job(job_id, params, api_key_override)
+    _run_job(job_id, params, together_key_override, openai_key_override)
 
 
-def submit_job(job_id: str, params: dict, *, api_key_override: str | None = None) -> None:
+def submit_job(
+    job_id: str,
+    params: dict,
+    *,
+    together_key_override: str | None = None,
+    openai_key_override: str | None = None,
+) -> None:
     """Submit a job to the thread pool for background execution."""
-    _executor.submit(_run_job, job_id, params, api_key_override)
+    _executor.submit(_run_job, job_id, params, together_key_override, openai_key_override)
 
 
-def submit_url_job(job_id: str, params: dict, url: str, *, api_key_override: str | None = None) -> None:
+def submit_url_job(
+    job_id: str,
+    params: dict,
+    url: str,
+    *,
+    together_key_override: str | None = None,
+    openai_key_override: str | None = None,
+) -> None:
     """Submit a URL-based job to the thread pool."""
-    _executor.submit(_run_url_job, job_id, params, url, api_key_override)
+    _executor.submit(_run_url_job, job_id, params, url, together_key_override, openai_key_override)

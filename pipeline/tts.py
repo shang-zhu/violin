@@ -1,5 +1,6 @@
 """Synthesize speech using Cartesia Sonic 3 via Together AI (serverless)."""
 
+import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -7,6 +8,7 @@ from together import Together
 
 from . import config as _conf
 from .costs import CostTracker
+from .ffmpeg_utils import FFMPEG_EXE
 from .transcriber import Segment
 
 # Native-sounding voices per language — matched to Cartesia's language-specific voice catalog.
@@ -55,6 +57,20 @@ def _apply_ssml(text: str, speed: float | None, emotion: str | None) -> str:
     return prefix + text if prefix else text
 
 
+def _append_silence(path: str, ms: int) -> None:
+    """Append ms milliseconds of silence to a WAV file in-place via ffmpeg."""
+    if ms <= 0:
+        return
+    tmp = path + ".pad.wav"
+    subprocess.run(
+        [FFMPEG_EXE, "-y", "-i", path,
+         "-af", f"apad=pad_dur={ms / 1000:.3f}",
+         tmp],
+        check=True, capture_output=True,
+    )
+    Path(tmp).replace(Path(path))
+
+
 def synthesize_segment(
     text: str,
     voice: str,
@@ -73,6 +89,8 @@ def synthesize_segment(
         language=language,
     )
     response.write_to_file(output_path)
+    tail_ms = _conf.get().get("tts", {}).get("tail_silence_ms", 0)
+    _append_silence(output_path, tail_ms)
     return output_path
 
 

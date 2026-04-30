@@ -251,6 +251,7 @@
           <label class="block text-xs font-semibold text-ink-400 uppercase tracking-[0.14em] mb-2">Target Language</label>
           <div class="relative">
             <select x-model="language" class="w-full appearance-none bg-cream-100 border border-cream-300 text-ink-800 rounded-lg px-4 py-3 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-gold-300 focus:border-transparent transition">
+              <option value="" disabled>Select target language</option>
               <template x-for="[name, code] in sortedLanguages" :key="name">
                 <option :value="name" x-text="nativeLabel(name, code)"></option>
               </template>
@@ -422,7 +423,7 @@
         <!-- Submit -->
         <button
           @click="submit()"
-          :disabled="(!file && !videoUrl.trim()) || (needsKey && !userApiKey.trim()) || (inputMode === 'file' && !file) || (inputMode === 'url' && !videoUrl.trim())"
+          :disabled="(!file && !videoUrl.trim()) || !language || (needsKey && !userApiKey.trim()) || (inputMode === 'file' && !file) || (inputMode === 'url' && !videoUrl.trim())"
           class="w-full py-3.5 px-6 rounded-full font-semibold text-sm tracking-wide transition-all duration-250 focus:outline-none focus:ring-2 focus:ring-gold-300 focus:ring-offset-2"
           :class="((inputMode === 'file' && file) || (inputMode === 'url' && videoUrl.trim())) && !(needsKey && !userApiKey.trim())
             ? 'bg-ink-800 hover:bg-accent-500 text-cream-100 shadow-[0_8px_28px_-12px_rgba(42,36,32,0.3)] hover:shadow-[0_8px_28px_-12px_rgba(139,46,42,0.3)] active:scale-[0.98]'
@@ -790,7 +791,7 @@ function app() {
     // form
     file: null,
     dragover: false,
-    language: 'spanish',
+    language: '',
     languages: {},
     voice: '',
     voiceDescription: '',
@@ -859,12 +860,7 @@ function app() {
     get activeSubtitleText() {
       if (!this.segments.length) return '';
       const active = this.segments.find(s => this.currentTime >= s.start && this.currentTime <= s.end);
-      if (!active) return '';
-      const sentences = active.text.match(/[^.!?。！？…]+[.!?。！？…]+\s*/g);
-      if (!sentences || sentences.length <= 1) return active.text;
-      const progress = (this.currentTime - active.start) / (active.end - active.start);
-      const idx = Math.min(Math.floor(progress * sentences.length), sentences.length - 1);
-      return sentences[idx].trim();
+      return active ? active.text.trim() : '';
     },
 
     get currentSubtitleContext() {
@@ -901,7 +897,6 @@ function app() {
       try {
         const res = await fetch('/languages');
         this.languages = await res.json();
-        this._autoSelectLanguage();
       } catch (_) {}
       try {
         const cfg = await fetch('/app-config');
@@ -975,18 +970,6 @@ function app() {
       } catch (_) {}
     },
 
-    _autoSelectLanguage() {
-      const browserLang = (navigator.language || '').toLowerCase();
-      const shortCode = browserLang.split('-')[0];
-
-      for (const [name, code] of Object.entries(this.languages)) {
-        if (code === browserLang || code === shortCode) {
-          this.language = name;
-          return;
-        }
-      }
-    },
-
     onDrop(e) {
       const f = e.dataTransfer.files[0];
       if (f) this.file = f;
@@ -1014,7 +997,7 @@ function app() {
         const res = await fetch('/voice-match', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ description: desc, language: this.language }),
+          body: JSON.stringify({ description: desc, language: this.language, together_api_key: this.userApiKey.trim() }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
@@ -1083,7 +1066,7 @@ function app() {
       fd.append('source_language', this.sourceLanguage);
       fd.append('subtitles', this.subtitles);
       fd.append('voiceover', this.voiceover);
-      fd.append('user_api_key', this.userApiKey.trim());
+      fd.append('together_api_key', this.userApiKey.trim());
 
       const usingOwnKey = !!this.userApiKey.trim();
       const xhr = new XMLHttpRequest();
@@ -1130,7 +1113,7 @@ function app() {
             subtitles: this.subtitles,
             style: 'standard',
             voiceover: this.voiceover,
-            user_api_key: this.userApiKey.trim(),
+            together_api_key: this.userApiKey.trim(),
           }),
         });
 

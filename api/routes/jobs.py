@@ -37,7 +37,8 @@ async def create_translation_job(
     subtitles: bool = Form(True, description="Generate SRT subtitle file"),
     style: str = Form("standard", description="Translation style profile (e.g. standard, kids, academic)"),
     voiceover: bool = Form(True, description="Voice-over mode: keep original audio underneath the dub"),
-    user_api_key: str = Form("", description="User-provided Together API key (optional)"),
+    together_api_key: str = Form("", description="User-provided Together API key (optional)"),
+    openai_api_key: str = Form("", description="User-provided OpenAI API key (optional, only needed when translation provider is OpenAI)"),
 ):
     """Upload a video and start a translation job. Returns immediately with a job ID."""
     suffix = Path(file.filename or "video.mp4").suffix.lower()
@@ -48,7 +49,7 @@ async def create_translation_job(
         )
 
     client_ip = _client_ip(request)
-    using_own_key = bool(user_api_key.strip())
+    using_own_key = bool(together_api_key.strip())
 
     if not using_own_key and not has_free_trial(client_ip):
         raise HTTPException(
@@ -73,8 +74,12 @@ async def create_translation_job(
     content = await file.read()
     dest.write_bytes(content)
 
-    api_key_override = user_api_key.strip() or None
-    submit_job(job_id, params, api_key_override=api_key_override)
+    submit_job(
+        job_id,
+        params,
+        together_key_override=together_api_key.strip() or None,
+        openai_key_override=openai_api_key.strip() or None,
+    )
 
     job = get_job(job_id)
     if job is None:
@@ -94,7 +99,8 @@ class UrlJobRequest(BaseModel):
     subtitles: bool = True
     style: str = "standard"
     voiceover: bool = True
-    user_api_key: str = ""
+    together_api_key: str = ""
+    openai_api_key: str = ""
 
 
 @router.post("/from-url", response_model=JobResponse, status_code=202)
@@ -107,7 +113,7 @@ async def create_job_from_url(request: Request, body: UrlJobRequest):
         raise HTTPException(status_code=400, detail="URL is required.")
 
     client_ip = _client_ip(request)
-    using_own_key = bool(body.user_api_key.strip())
+    using_own_key = bool(body.together_api_key.strip())
 
     if not using_own_key and not has_free_trial(client_ip):
         raise HTTPException(
@@ -127,8 +133,13 @@ async def create_job_from_url(request: Request, body: UrlJobRequest):
 
     create_job(job_id, params)
 
-    api_key_override = body.user_api_key.strip() or None
-    submit_url_job(job_id, params, body.url.strip(), api_key_override=api_key_override)
+    submit_url_job(
+        job_id,
+        params,
+        body.url.strip(),
+        together_key_override=body.together_api_key.strip() or None,
+        openai_key_override=body.openai_api_key.strip() or None,
+    )
 
     job = get_job(job_id)
     if job is None:

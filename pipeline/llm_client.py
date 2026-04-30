@@ -39,22 +39,29 @@ def get_translation_provider(cfg: dict[str, Any]) -> str:
     return provider
 
 
-def make_translation_client(cfg: dict[str, Any], *, api_key_override: str | None = None):
+def make_translation_client(
+    cfg: dict[str, Any],
+    *,
+    together_key_override: str | None = None,
+    openai_key_override: str | None = None,
+):
     """Create the appropriate chat client based on the translation provider config.
 
-    If *api_key_override* is provided it is used instead of the environment variable.
+    *together_key_override* is used when provider is 'together'.
+    *openai_key_override* is used when provider is 'openai'.
+    Each falls back to the corresponding environment variable if not provided.
     """
     provider, _ = _parse_translation_config(cfg)
 
     if provider == "openai":
         from openai import OpenAI
-        api_key = api_key_override or os.environ.get("OPENAI_API_KEY")
+        api_key = openai_key_override or os.environ.get("OPENAI_API_KEY")
         if not api_key:
             raise RuntimeError("OPENAI_API_KEY environment variable is not set.")
         return OpenAI(api_key=api_key)
 
     from together import Together
-    api_key = api_key_override or os.environ.get("TOGETHER_API_KEY")
+    api_key = together_key_override or os.environ.get("TOGETHER_API_KEY")
     if not api_key:
         raise RuntimeError("TOGETHER_API_KEY environment variable is not set.")
     return Together(api_key=api_key)

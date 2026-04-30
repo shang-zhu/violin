@@ -115,7 +115,7 @@ def _parse_voice_candidates(raw: str, all_ids: list[str]) -> list[VoiceCandidate
 @router.post("/voice-match", response_model=VoiceMatchResponse)
 def match_voice(payload: VoiceMatchRequest):
     """Use an LLM to map a natural language voice description to the best Cartesia voice."""
-    api_key = os.environ.get("TOGETHER_API_KEY")
+    api_key = payload.together_api_key.strip() or os.environ.get("TOGETHER_API_KEY")
     if not api_key:
         raise HTTPException(status_code=500, detail="TOGETHER_API_KEY is not configured.")
 
@@ -147,26 +147,26 @@ def match_voice(payload: VoiceMatchRequest):
 
     last_error = ""
     for attempt in range(_MAX_VOICE_MATCH_RETRIES):
-        response = client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=0.1,
-            max_tokens=400,
-            extra_body={"reasoning": {"enabled": False}},
-        )
-        msg = response.choices[0].message
-        raw = (msg.content or "").strip()
-
-        if not raw:
-            last_error = "LLM returned empty response"
-            continue
-
         try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=0.1,
+                max_tokens=400,
+                extra_body={"reasoning": {"enabled": False}},
+            )
+            msg = response.choices[0].message
+            raw = (msg.content or "").strip()
+
+            if not raw:
+                last_error = "LLM returned empty response"
+                continue
+
             candidates = _parse_voice_candidates(raw, all_ids)
             if candidates:
                 return VoiceMatchResponse(candidates=candidates)
             last_error = "parsed JSON but found no valid voice names"
         except (json.JSONDecodeError, Exception) as exc:
-            last_error = f"{exc} | raw: {raw[:200]}"
+            last_error = str(exc)
 
     raise HTTPException(status_code=502, detail=f"Voice matching failed after {_MAX_VOICE_MATCH_RETRIES} attempts ({last_error})")

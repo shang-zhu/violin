@@ -15,7 +15,7 @@ batch_user: |
   - Write entirely in {target_language}. Only keep widely recognized abbreviations (e.g., GPT, API, URL, Python, PyTorch) in English.
   - Translate all other English words, including technical terms, using their standard {target_language} equivalents.
   - Sound natural — write the way a native {target_language} speaker would explain the same idea.
-
+  {asr_corrections_block}
   Segments ({num_segments} total):
   {numbered_segments}
 
@@ -52,7 +52,7 @@ single_system: |
 single_user: |
   Translate the following text from {source_language} to {target_language}.
   Write entirely in {target_language}. Sound natural. Sentence fragments are fine — translate as-is.
-
+  {asr_corrections_block}
   Text: {text}
 
 single_system_styled: |
