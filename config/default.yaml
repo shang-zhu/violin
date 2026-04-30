@@ -174,7 +174,7 @@ merge:
 
 # ── Video merge / alignment ─────────────────────────────────
 merge_video:
-  workers: 4           # concurrent ffmpeg processes per job — keep low on small RAM machines (~300MB each)
+  workers: 16          # concurrent ffmpeg processes per job (each ~300MB RAM); lower this on small instances via prod.yaml
   output_fps: 30
   min_gap: 0.05        # seconds — skip gap chunks shorter than this
   speed_clamp_min: 0.5
@@ -186,7 +186,7 @@ merge_video:
 # ── API server ──────────────────────────────────────────────
 api:
   jobs_dir: "jobs"
-  max_workers: 1             # concurrent jobs — multiplied by merge_video.workers gives total ffmpeg count
+  max_workers: 8             # concurrent jobs (× merge_video.workers = total ffmpeg processes); lower on small instances via prod.yaml
   job_ttl_hours: 24          # auto-delete completed/failed jobs older than this (0 = disable)
   free_trial_jobs: 1         # jobs allowed per IP without a user-provided API key (0 = unlimited)
   url_upload: true           # allow users to paste video URLs (yt-dlp); set false to disable

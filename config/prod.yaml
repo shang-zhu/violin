@@ -1,0 +1,24 @@
+# Production overrides for small EC2 instances (e.g. t3.medium 4GB / c7g.large 4GB).
+# Only fields listed here override default.yaml; everything else inherits.
+# Load with:  uvicorn api.main:app  +  CONFIG=config/prod.yaml
+# (or wherever the launcher reads the config path).
+
+# ── Concurrency ─────────────────────────────────────────────
+# Each ffmpeg process uses ~300MB RAM. Total processes = api.max_workers ×
+# merge_video.workers. On 4GB RAM keep total ≤ 4 (~1.2GB) to leave headroom
+# for the Python process and OS.
+merge_video:
+  workers: 4
+  preset: "ultrafast"        # already default — fastest x264 path, lowest CPU
+
+api:
+  max_workers: 1             # serialize jobs to avoid the multiplier blowing up RAM
+
+# ── Transcription ───────────────────────────────────────────
+# Fewer parallel Whisper API calls — keeps the Python event loop and memory
+# pressure light while a long video is in flight.
+transcription:
+  parallel_workers: 2
+
+tts:
+  workers: 1
