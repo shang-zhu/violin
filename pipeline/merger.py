@@ -55,6 +55,7 @@ def _make_speech_chunk(
     voiceover: bool = False,
     mix_volume: float = 0.0,
     no_audio: bool = False,
+    freeze_extra: float = 0.0,
 ) -> None:
     """Extract video segment, speed-adjust to match TTS duration, mux with TTS audio.
 
@@ -62,6 +63,9 @@ def _make_speech_chunk(
     *mix_volume*: bake original audio into the video at this level (0.0–1.0).
     *no_audio*: produce video stream only — caller will build a single audio
     track and mux it once at the end (avoids per-chunk AAC quantization drift).
+    *freeze_extra*: extra seconds of frozen last-frame appended after the
+    speed-adjusted video, used when TTS exceeds the speed-clamped duration so
+    we don't truncate the end of the speech.
     """
     vcfg = _conf.get()["merge_video"]
     if fps is None:
@@ -74,13 +78,15 @@ def _make_speech_chunk(
     else:
         speed = max(vcfg["speed_clamp_min"], min(vcfg["speed_clamp_max"], orig_dur / tts_dur))
     target_dur = orig_dur / speed
+    total_dur = target_dur + max(0.0, freeze_extra)
+    tpad = f",tpad=stop_mode=clone:stop_duration={freeze_extra:.3f}" if freeze_extra > 0 else ""
 
     coarse = max(0, start - _SEEK_PAD)
     fine = start - coarse
 
     if no_audio:
         filter_complex = (
-            f"[0:v]trim=start={fine}:duration={orig_dur},setpts=(PTS-STARTPTS)/{speed},fps=fps={fps}[v]"
+            f"[0:v]trim=start={fine}:duration={orig_dur},setpts=(PTS-STARTPTS)/{speed}{tpad},fps=fps={fps}[v]"
         )
         subprocess.run([
             FFMPEG_EXE,
@@ -89,7 +95,7 @@ def _make_speech_chunk(
             "-map", "[v]",
             "-c:v", "libx264", "-preset", vcfg["preset"], "-crf", str(vcfg["crf"]),
             "-an",
-            "-t", str(target_dur),
+            "-t", str(total_dur),
             "-f", "mpegts",
             "-y", out_path,
         ], check=True, capture_output=True)
@@ -100,16 +106,16 @@ def _make_speech_chunk(
         atempo = _atempo_chain(speed) if speed != 1.0 else ""
         atempo_part = f",{atempo}" if atempo else ""
         filter_complex = (
-            f"[0:v]trim=start={fine}:duration={orig_dur},setpts=(PTS-STARTPTS)/{speed},fps=fps={fps}[v];"
+            f"[0:v]trim=start={fine}:duration={orig_dur},setpts=(PTS-STARTPTS)/{speed}{tpad},fps=fps={fps}[v];"
             f"[0:a]atrim=start={fine}:duration={orig_dur},asetpts=PTS-STARTPTS"
             f"{atempo_part},loudnorm=I=-23:TP=-1.5:LRA=11,volume={vol}[orig];"
             f"[1:a:0]apad[tts];"
-            f"[orig][tts]amix=inputs=2:duration=shortest[a]"
+            f"[orig][tts]amix=inputs=2:duration=longest[a]"
         )
         maps = ["-map", "[v]", "-map", "[a]"]
     else:
         filter_complex = (
-            f"[0:v]trim=start={fine}:duration={orig_dur},setpts=(PTS-STARTPTS)/{speed},fps=fps={fps}[v]"
+            f"[0:v]trim=start={fine}:duration={orig_dur},setpts=(PTS-STARTPTS)/{speed}{tpad},fps=fps={fps}[v]"
         )
         maps = ["-map", "[v]", "-map", "1:a:0"]
 
@@ -121,7 +127,7 @@ def _make_speech_chunk(
         *maps,
         "-c:v", "libx264", "-preset", vcfg["preset"], "-crf", str(vcfg["crf"]),
         "-c:a", "aac", "-ar", str(_SAMPLE_RATE), "-ac", "1",
-        "-t", str(target_dur),
+        "-t", str(total_dur),
         "-f", "mpegts",
         "-y", out_path,
     ], check=True, capture_output=True)
@@ -155,7 +161,12 @@ def _make_orig_audio_chunk(
 
 
 def _make_silence_audio_chunk(duration: float, out_path: str) -> None:
-    """Create a silent audio-only WAV chunk of given duration."""
+    """Create a silent audio-only WAV chunk of given duration.
+
+    Floors the duration at 1 ms — ffmpeg's lavfi anullsrc rejects effectively
+    zero-length outputs (which can leak in via float rounding upstream).
+    """
+    duration = max(0.001, float(duration))
     subprocess.run([
         FFMPEG_EXE,
         "-f", "lavfi", "-i", f"anullsrc=r={_SAMPLE_RATE}:cl=mono",
@@ -405,7 +416,6 @@ def build_aligned_video(
 
         tts_dur = tts_durations[i] if tts_durations else get_duration_video(tts_path)
         speech_path = str(tmp_dir / f"seg_{i:05d}.ts")
-        chunks.append(("speech", (video_path, seg.start, seg.end, tts_path, speech_path, fps, tts_dur, voiceover, mix_vol, no_audio)))
 
         orig_dur = seg.end - seg.start
         if orig_dur < 0.01 or tts_dur < 0.01:
@@ -413,10 +423,27 @@ def build_aligned_video(
         else:
             clamped_speed = max(vcfg["speed_clamp_min"],
                                 min(vcfg["speed_clamp_max"], orig_dur / tts_dur))
-        chunk_dur = orig_dur / clamped_speed
+        target_dur = orig_dur / clamped_speed
+        # When TTS is longer than the speed-clamped video, freeze the last
+        # frame to cover the extra so we don't truncate the speech audio.
+        # Threshold at 1 ms — anything smaller is float noise (the math
+        # cancels exactly when unclamped) and ffmpeg refuses zero-length
+        # silence tracks anyway.
+        freeze_extra = tts_dur - target_dur
+        if freeze_extra < 0.001:
+            freeze_extra = 0.0
+        chunk_dur = target_dur + freeze_extra  # = max(target_dur, tts_dur)
 
-        audio_plan.append(("speech", seg.start, seg.end, chunk_dur, clamped_speed))
+        chunks.append(("speech", (video_path, seg.start, seg.end, tts_path, speech_path, fps, tts_dur, voiceover, mix_vol, no_audio, freeze_extra)))
+
+        # m4a: speed-adjusted original audio for target_dur, then silence for
+        # the freeze interval (no original audio while video is frozen).
+        audio_plan.append(("speech", seg.start, seg.end, target_dur, clamped_speed))
+        if freeze_extra > 0:
+            audio_plan.append(("silence", None, None, freeze_extra, 1.0))
         if no_audio:
+            # Pad/cut TTS to chunk_dur — since chunk_dur = max(target_dur, tts_dur)
+            # this never truncates real speech.
             video_audio_plan.append(("tts", tts_path, chunk_dur))
 
         new_start = new_time

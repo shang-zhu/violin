@@ -238,14 +238,25 @@ def _transcribe_single(
     assert response is not None
 
     words = getattr(response, "words", None) or []
+    valid_segments = [s for s in response.segments if _is_valid(s)]
+
     if words:
+        # Use the segment-level confidence signal (no_speech_prob etc. via
+        # _is_valid) to drop words that fall inside hallucinated time ranges
+        # — Whisper invents tokens like "你 你 你 你..." or "thank you. thank
+        # you..." over silence/music at the ends of clips.
+        valid_ranges = [(_g(s, "start"), _g(s, "end")) for s in valid_segments]
+        if valid_ranges:
+            def _in_valid_range(w: object) -> bool:
+                ws = _g(w, "start") or 0.0
+                return any(rs <= ws <= re for rs, re in valid_ranges)
+            words = [w for w in words if _in_valid_range(w)]
         return _split_words_into_sentences(words)
 
     # Fallback: no word timestamps available, use segment-level.
-    valid = [s for s in response.segments if _is_valid(s)]
     return [
         Segment(id=i, start=_g(s, "start"), end=_g(s, "end"), text=_g(s, "text").strip())
-        for i, s in enumerate(valid)
+        for i, s in enumerate(valid_segments)
     ]
 
 

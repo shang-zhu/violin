@@ -7,6 +7,19 @@
 # Each ffmpeg process uses ~300MB RAM. Total processes = api.max_workers ×
 # merge_video.workers. On 4GB RAM keep total ≤ 4 (~1.2GB) to leave headroom
 # for the Python process and OS.
+models:
+  transcription: "openai/whisper-large-v3"
+  translation:
+    provider: together                  # "openai" or "together"
+    model: Qwen/Qwen3.5-397B-A17B
+    # provider: openai
+    # model: gpt-5.4-mini
+  tts:
+    provider: cartesia                # "cartesia" or "elevenlabs"
+    model: cartesia/sonic-3
+    # provider: elevenlabs
+    # model: eleven_v3
+
 merge_video:
   workers: 4
   preset: "ultrafast"        # already default — fastest x264 path, lowest CPU

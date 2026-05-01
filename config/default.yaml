@@ -5,17 +5,25 @@
 models:
   transcription: "openai/whisper-large-v3"
   translation:
-    provider: together                  # "openai" or "together"
-    model: Qwen/Qwen3.5-397B-A17B
-    # provider: openai
-    # model: gpt-5.4-mini
-  tts: "cartesia/sonic-3"
+    # provider: together                  # "openai" or "together"
+    # model: Qwen/Qwen3.5-397B-A17B
+    provider: openai
+    model: gpt-5.4-mini
+  tts:
+    # provider: cartesia                # "cartesia" or "elevenlabs"
+    # model: cartesia/sonic-3
+    provider: elevenlabs
+    model: eleven_v3
   video_chat: "Qwen/Qwen3.5-397B-A17B"
 
 # ── Pricing ──────────────────────────────────────────────────
 pricing:
   whisper_per_minute: 0.0015          # Together AI Whisper
-  tts_per_m_characters: 65.00         # Together AI Cartesia Sonic 3
+  tts:
+    cartesia:
+      per_m_characters: 65.00         # Together AI Cartesia Sonic 3
+    elevenlabs:
+      per_m_characters: 165.00        # ElevenLabs eleven_v3 (~$0.165 / 1k chars on Creator tier)
   translation:
     together:                          # Together AI serverless
       per_m_input_tokens: 0.30
