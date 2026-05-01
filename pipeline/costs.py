@@ -41,6 +41,7 @@ class CostTracker:
     def print_summary(self) -> None:
         from . import config as _conf
         from .llm_client import get_translation_provider
+        from .tts import get_tts_provider
 
         cfg = _conf.get()
         pricing = cfg["pricing"]
@@ -55,7 +56,19 @@ class CostTracker:
             + self.llm_output_tokens / 1_000_000 * llm_pricing["per_m_output_tokens"]
         )
 
-        tts_cost = self.tts_characters / 1_000_000 * pricing["tts_per_m_characters"]
+        tts_provider = get_tts_provider()
+        tts_pricing = pricing.get("tts", {})
+        # Backwards compat with the old flat key.
+        if isinstance(tts_pricing, (int, float)):
+            tts_per_m = float(tts_pricing)
+        elif "per_m_characters" in tts_pricing:
+            tts_per_m = tts_pricing["per_m_characters"]
+        else:
+            tts_per_m = tts_pricing.get(tts_provider, {}).get("per_m_characters", 0.0)
+        # Legacy flat key fallback.
+        if not tts_per_m:
+            tts_per_m = pricing.get("tts_per_m_characters", 0.0)
+        tts_cost = self.tts_characters / 1_000_000 * tts_per_m
         total_cost = whisper_cost + llm_cost + tts_cost
 
         print("\n" + "=" * 62)

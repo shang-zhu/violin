@@ -14,7 +14,7 @@ from api.models import VoiceCandidate, VoiceMatchRequest, VoiceMatchResponse
 from pipeline import config as _conf
 from pipeline.languages import all_languages, language_code
 from pipeline.styles import list_styles
-from pipeline.tts import all_voices, native_voices_for
+from pipeline.tts import all_voices, native_voices_for, voice_descriptions
 import prompts as _prompts
 
 load_dotenv()
@@ -55,23 +55,34 @@ def get_styles() -> list[dict]:
 
 
 def _build_voice_catalog(target_lang: str) -> str:
-    """Format the full Cartesia voice catalog as a string for the LLM prompt."""
+    """Format the active provider's voice catalog as a string for the LLM prompt.
+
+    Each voice is rendered as `- <name> — <description>`. For Cartesia the
+    description is the name itself (e.g. 'german conversational woman'); for
+    ElevenLabs it is the official metadata description.
+    """
     voices = all_voices()
+    descriptions = voice_descriptions()
     target_code = language_code(target_lang) if target_lang else ""
     lines: list[str] = []
+
+    def _fmt(name: str) -> str:
+        d = descriptions.get(name, "")
+        return f"  - {name} — {d}" if d and d != name else f"  - {name}"
 
     if target_code and target_code in voices:
         lines.append(f"== Voices for target language ({target_code}) ==")
         for v in voices[target_code]:
-            lines.append(f"  - {v}")
+            lines.append(_fmt(v))
         lines.append("")
 
     for code, voice_list in sorted(voices.items()):
         if code == target_code:
             continue
-        lines.append(f"== {code} ==")
+        header = "All voices (multilingual)" if code == "multi" else code
+        lines.append(f"== {header} ==")
         for v in voice_list:
-            lines.append(f"  - {v}")
+            lines.append(_fmt(v))
     return "\n".join(lines)
 
 

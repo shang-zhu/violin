@@ -39,6 +39,7 @@ async def create_translation_job(
     voiceover: bool = Form(True, description="Voice-over mode: keep original audio underneath the dub"),
     together_api_key: str = Form("", description="User-provided Together API key (optional)"),
     openai_api_key: str = Form("", description="User-provided OpenAI API key (optional, only needed when translation provider is OpenAI)"),
+    elevenlabs_api_key: str = Form("", description="User-provided ElevenLabs API key (optional, only needed when TTS provider is ElevenLabs)"),
 ):
     """Upload a video and start a translation job. Returns immediately with a job ID."""
     suffix = Path(file.filename or "video.mp4").suffix.lower()
@@ -79,6 +80,7 @@ async def create_translation_job(
         params,
         together_key_override=together_api_key.strip() or None,
         openai_key_override=openai_api_key.strip() or None,
+        elevenlabs_key_override=elevenlabs_api_key.strip() or None,
     )
 
     job = get_job(job_id)
@@ -101,6 +103,7 @@ class UrlJobRequest(BaseModel):
     voiceover: bool = True
     together_api_key: str = ""
     openai_api_key: str = ""
+    elevenlabs_api_key: str = ""
 
 
 @router.post("/from-url", response_model=JobResponse, status_code=202)
@@ -139,6 +142,7 @@ async def create_job_from_url(request: Request, body: UrlJobRequest):
         body.url.strip(),
         together_key_override=body.together_api_key.strip() or None,
         openai_key_override=body.openai_api_key.strip() or None,
+        elevenlabs_key_override=body.elevenlabs_api_key.strip() or None,
     )
 
     job = get_job(job_id)

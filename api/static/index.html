@@ -154,10 +154,152 @@
       <span class="text-4xl">🎻</span>
       <h1 class="font-display text-4xl font-semibold tracking-tight text-ink-800">Violin</h1>
     </div>
-    <p class="text-ink-400 text-sm tracking-wide">
-      Video dubbing in 42 languages · powered by <span class="font-medium text-gold-400">Together AI</span>
+    <p class="text-ink-400 text-sm mt-2 max-w-xl mx-auto">
+      Upload any video. Get a translated voiceover in a native-sounding voice, plus synced subtitles.
     </p>
   </header>
+
+  <!-- Demo gallery: 3 cards. Click ▶ to preview, "Try this" to load into the form. -->
+  <section
+    x-show="phase === 'upload'"
+    @keydown.escape.window="demoOpen && closeDemo()"
+    class="mx-auto px-4 pb-8 max-w-3xl"
+  >
+    <div class="flex items-center justify-between mb-3 px-1">
+      <p class="text-[11px] font-medium text-ink-400 uppercase tracking-wider">See examples · or try one yourself</p>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <template x-for="(item, idx) in demoItems" :key="idx">
+        <div class="group rounded-xl overflow-hidden bg-cream-50 border border-cream-300/60 shadow-sm hover:shadow-md transition-all duration-200">
+          <button
+            type="button"
+            @click="openDemo(idx)"
+            class="relative w-full aspect-video bg-black overflow-hidden block"
+            :aria-label="'Watch ' + item.title + ' — ' + item.dubLang + ' dub'"
+          >
+            <img
+              :src="item.poster"
+              :alt="item.title"
+              class="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity"
+              loading="lazy"
+            />
+            <div class="absolute inset-0 flex items-center justify-center">
+              <span class="flex items-center justify-center w-11 h-11 rounded-full bg-black/45 backdrop-blur-sm ring-1 ring-white/20 group-hover:bg-black/60 group-hover:scale-105 transition-all">
+                <svg class="w-4 h-4 text-cream-100 ml-0.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M6.3 3.7A1 1 0 0 0 5 4.6v10.8a1 1 0 0 0 1.5.86l9-5.4a1 1 0 0 0 0-1.72l-9-5.4a1 1 0 0 0-.2-.04Z" />
+                </svg>
+              </span>
+            </div>
+            <span class="absolute top-2 left-2 text-[10px] font-semibold tracking-wide px-2 py-0.5 rounded-full bg-black/55 backdrop-blur-md text-cream-100 ring-1 ring-white/10">
+              <span class="opacity-70" x-text="item.origCode + ' →'"></span>
+              <span x-text="item.dubCode"></span>
+            </span>
+          </button>
+          <div class="px-3 py-2.5 flex items-center justify-between gap-2">
+            <div class="min-w-0">
+              <p class="text-xs font-semibold text-ink-700 truncate" x-text="item.title"></p>
+              <p class="text-[11px] text-ink-400 truncate" x-text="item.subtitle"></p>
+            </div>
+            <button
+              type="button"
+              @click="tryThis(idx)"
+              :disabled="loadingDemoIdx === idx"
+              class="flex-shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-cream-200/70 hover:bg-gold-100 text-ink-700 hover:text-gold-600 ring-1 ring-cream-300/60 transition-all"
+            >
+              <span x-show="loadingDemoIdx !== idx">Try this</span>
+              <span x-show="loadingDemoIdx === idx" class="inline-flex items-center gap-1">
+                <svg class="w-3 h-3 animate-spin-slow" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                </svg>
+                Loading
+              </span>
+            </button>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <!-- Modal player — opens when a card is clicked. Pill toggles between original and dub. -->
+    <div
+      x-show="demoOpen"
+      x-cloak
+      x-transition.opacity
+      @click="closeDemo()"
+      class="fixed inset-0 z-50 bg-ink-800/65 backdrop-blur-sm flex items-center justify-center p-4"
+    >
+      <template x-if="demoOpen">
+        <div
+          @click.stop
+          x-transition:enter="transition ease-out duration-200"
+          x-transition:enter-start="opacity-0 scale-95"
+          x-transition:enter-end="opacity-100 scale-100"
+          class="relative w-full max-w-2xl"
+        >
+          <div class="flex justify-center mb-3">
+            <div class="inline-flex bg-cream-200/90 backdrop-blur-md rounded-full p-1 border border-cream-300/60 shadow-sm">
+              <button
+                type="button"
+                @click="switchDemoVersion('orig')"
+                :class="demoVersion === 'orig'
+                  ? 'bg-cream-50 text-ink-800 shadow-[0_2px_8px_-2px_rgba(42,36,32,0.15)]'
+                  : 'text-ink-400 hover:text-ink-600'"
+                class="px-4 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-all duration-200"
+              >
+                Original <span class="ml-1 font-normal opacity-60 text-[10px]" x-text="demoItems[demoActiveIdx].origCode"></span>
+              </button>
+              <button
+                type="button"
+                @click="switchDemoVersion('dub')"
+                :class="demoVersion === 'dub'
+                  ? 'bg-cream-50 text-ink-800 shadow-[0_2px_8px_-2px_rgba(42,36,32,0.15)]'
+                  : 'text-ink-400 hover:text-ink-600'"
+                class="px-4 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-all duration-200"
+              >
+                <span class="mr-1 inline-block w-1.5 h-1.5 rounded-full bg-gold-400 align-middle"></span>
+                Translated <span class="ml-1 font-normal opacity-60 text-[10px]" x-text="demoItems[demoActiveIdx].dubCode"></span>
+              </button>
+            </div>
+          </div>
+
+          <div class="relative rounded-2xl overflow-hidden bg-black shadow-[0_30px_80px_-20px_rgba(0,0,0,0.5)] border border-white/10">
+            <video
+              x-ref="modalDub"
+              :src="demoItems[demoActiveIdx].dubUrl"
+              class="w-full block transition-opacity duration-300"
+              :class="demoVersion === 'dub' ? 'opacity-100 relative' : 'opacity-0 absolute inset-0 pointer-events-none'"
+              loop playsinline preload="metadata"
+              controls
+            ></video>
+            <video
+              x-ref="modalOrig"
+              :src="demoItems[demoActiveIdx].origUrl"
+              class="w-full block transition-opacity duration-300"
+              :class="demoVersion === 'orig' ? 'opacity-100 relative' : 'opacity-0 absolute inset-0 pointer-events-none'"
+              loop playsinline preload="metadata"
+              controls
+            ></video>
+          </div>
+
+          <button
+            type="button"
+            @click="closeDemo()"
+            class="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-cream-50 hover:bg-cream-200 ring-1 ring-cream-300/60 shadow flex items-center justify-center transition-all"
+            aria-label="Close"
+          >
+            <svg class="w-4 h-4 text-ink-600" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
+          </button>
+
+          <p class="text-center text-[11px] text-cream-200/70 mt-3 tracking-wide">
+            <span x-text="demoItems[demoActiveIdx].title"></span> ·
+            <span x-text="demoItems[demoActiveIdx].subtitle"></span>
+          </p>
+        </div>
+      </template>
+    </div>
+  </section>
 
   <!-- Main card -->
   <main class="mx-auto px-4 pb-10 transition-all duration-300" :class="phase === 'done' ? 'max-w-3xl' : 'max-w-xl'">
@@ -673,19 +815,10 @@
     </div><!-- /card -->
 
     <!-- Pipeline info footer -->
-    <div x-show="phase === 'upload'" class="mt-6 flex items-center justify-center gap-6 text-[11px] text-ink-400">
-      <span class="flex items-center gap-1.5">
-        <span class="w-1.5 h-1.5 rounded-full bg-accent-400 inline-block"></span>
-        Whisper v3
-      </span>
-      <span class="flex items-center gap-1.5">
-        <span class="w-1.5 h-1.5 rounded-full bg-gold-400 inline-block"></span>
-        Qwen 3.5-397B
-      </span>
-      <span class="flex items-center gap-1.5">
-        <span class="w-1.5 h-1.5 rounded-full bg-accent-300 inline-block"></span>
-        Cartesia Sonic 3
-      </span>
+    <div x-show="phase === 'upload'" class="mt-6 text-center">
+      <p class="text-[11px] text-ink-300 tracking-wide">
+        powered by <span class="font-medium text-gold-400">Together AI</span>
+      </p>
     </div>
 
   </main>
@@ -809,6 +942,41 @@ function app() {
     inputMode: 'file',
     videoUrl: '',
     urlUploadEnabled: false,
+
+    // demo gallery
+    demoOpen: false,
+    demoActiveIdx: 0,
+    demoVersion: 'dub',          // 'orig' | 'dub'
+    loadingDemoIdx: -1,
+    demoItems: [
+      {
+        title: 'GPT-OSS launch',
+        subtitle: 'Hassan',
+        origUrl: '/static/demo/hassan_gpt_oss_en.mp4',
+        origLang: 'english',  origCode: 'EN',
+        dubUrl:  '/static/demo/hassan_gpt_oss_ko.mp4',
+        dubLang:  'korean',   dubCode:  'KO',
+        poster:  '/static/demo/posters/hassan_gpt_oss_ko.jpg',
+      },
+      {
+        title: 'Dario Amodei',
+        subtitle: 'Dwarkesh Patel',
+        origUrl: '/static/demo/dario_interview_en.mp4',
+        origLang: 'english',  origCode: 'EN',
+        dubUrl:  '/static/demo/dario_interview_it.mp4',
+        dubLang:  'italian',  dubCode:  'IT',
+        poster:  '/static/demo/posters/dario_interview_it.jpg',
+      },
+      {
+        title: 'Together Talks',
+        subtitle: 'Percy Liang',
+        origUrl: '/static/demo/percy_en.mp4',
+        origLang: 'english',  origCode: 'EN',
+        dubUrl:  '/static/demo/percy_zh.mp4',
+        dubLang:  'chinese',  dubCode:  'ZH',
+        poster:  '/static/demo/posters/percy_zh.jpg',
+      },
+    ],
 
     // API key / trial
     userApiKey: localStorage.getItem('violin_api_key') || '',
@@ -1217,6 +1385,60 @@ function app() {
 
     isActiveSegment(segment) {
       return this.currentTime >= segment.start && this.currentTime <= segment.end;
+    },
+
+    // ── Demo gallery ───────────────────────────────────────────
+    openDemo(idx) {
+      this.demoActiveIdx = idx;
+      this.demoVersion = 'dub';
+      this.demoOpen = true;
+      this.$nextTick(() => {
+        const v = this.$refs.modalDub;
+        if (v) { v.muted = false; v.currentTime = 0; v.play().catch(() => {}); }
+      });
+    },
+
+    closeDemo() {
+      this.demoOpen = false;
+      if (this.$refs.modalDub) this.$refs.modalDub.pause();
+      if (this.$refs.modalOrig) this.$refs.modalOrig.pause();
+    },
+
+    switchDemoVersion(v) {
+      if (this.demoVersion === v) return;
+      const cur = v === 'orig' ? this.$refs.modalDub : this.$refs.modalOrig;
+      const next = v === 'orig' ? this.$refs.modalOrig : this.$refs.modalDub;
+      if (cur) cur.pause();
+      this.demoVersion = v;
+      if (next) { next.muted = false; next.currentTime = 0; next.play().catch(() => {}); }
+    },
+
+    async tryThis(idx) {
+      if (this.loadingDemoIdx >= 0) return;
+      const item = this.demoItems[idx];
+      this.loadingDemoIdx = idx;
+      try {
+        const res = await fetch(item.origUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        const filename = item.origUrl.split('/').pop() || 'sample.mp4';
+        this.file = new File([blob], filename, { type: blob.type || 'video/mp4' });
+        this.inputMode = 'file';
+        this.videoUrl = '';
+        if (this.languages[item.dubLang]) {
+          this.language = item.dubLang;
+        }
+        this.closeDemo();
+        // Smooth-scroll to the upload card so the user sees the form ready to submit
+        this.$nextTick(() => {
+          const main = document.querySelector('main');
+          if (main) main.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+      } catch (err) {
+        alert('Could not load sample video: ' + err.message);
+      } finally {
+        this.loadingDemoIdx = -1;
+      }
     },
 
     renderMarkdown(text) {

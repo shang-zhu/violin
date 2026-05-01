@@ -65,6 +65,7 @@ def _run_job(
     params: dict,
     together_key_override: str | None = None,
     openai_key_override: str | None = None,
+    elevenlabs_key_override: str | None = None,
 ) -> None:
     update_status(job_id, JobStatus.running)
 
@@ -121,7 +122,9 @@ def _run_job(
 
             _check_cancelled(job_id)
             effective_voice = voice or native_voices_for(lang_code)[0]
-            _progress(job_id, 4, f"Synthesizing TTS with Cartesia Sonic 3 (voice: {effective_voice})…")
+            tts_model = cfg["models"]["tts"]
+            tts_label = tts_model["model"] if isinstance(tts_model, dict) else tts_model
+            _progress(job_id, 4, f"Synthesizing TTS with {tts_label} (voice: {effective_voice})…")
             tts_dir = tmp_dir / "tts"
             tts_dir.mkdir()
 
@@ -148,6 +151,7 @@ def _run_job(
                 translated, effective_voice, str(tts_dir), client,
                 language=lang_code,
                 speed=style.tts_speed, emotion=style.tts_emotion,
+                elevenlabs_api_key=elevenlabs_key_override,
             )
             gap_thread.join()
             if gap_exc:
@@ -225,6 +229,7 @@ def _run_url_job(
     url: str,
     together_key_override: str | None = None,
     openai_key_override: str | None = None,
+    elevenlabs_key_override: str | None = None,
 ) -> None:
     """Download video from URL, then run the normal translation pipeline."""
     update_status(job_id, JobStatus.running)
@@ -236,7 +241,7 @@ def _run_url_job(
         update_status(job_id, JobStatus.failed, f"Download failed: {exc}")
         return
 
-    _run_job(job_id, params, together_key_override, openai_key_override)
+    _run_job(job_id, params, together_key_override, openai_key_override, elevenlabs_key_override)
 
 
 def submit_job(
@@ -245,9 +250,10 @@ def submit_job(
     *,
     together_key_override: str | None = None,
     openai_key_override: str | None = None,
+    elevenlabs_key_override: str | None = None,
 ) -> None:
     """Submit a job to the thread pool for background execution."""
-    _executor.submit(_run_job, job_id, params, together_key_override, openai_key_override)
+    _executor.submit(_run_job, job_id, params, together_key_override, openai_key_override, elevenlabs_key_override)
 
 
 def submit_url_job(
@@ -257,6 +263,7 @@ def submit_url_job(
     *,
     together_key_override: str | None = None,
     openai_key_override: str | None = None,
+    elevenlabs_key_override: str | None = None,
 ) -> None:
     """Submit a URL-based job to the thread pool."""
-    _executor.submit(_run_url_job, job_id, params, url, together_key_override, openai_key_override)
+    _executor.submit(_run_url_job, job_id, params, url, together_key_override, openai_key_override, elevenlabs_key_override)
