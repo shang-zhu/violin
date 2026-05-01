@@ -163,13 +163,13 @@
   <section
     x-show="phase === 'upload'"
     @keydown.escape.window="demoOpen && closeDemo()"
-    class="mx-auto px-4 pb-8 max-w-3xl"
+    class="mx-auto px-4 pb-8 max-w-xl"
   >
     <div class="flex items-center justify-between mb-3 px-1">
       <p class="text-[11px] font-medium text-ink-400 uppercase tracking-wider">See examples · or try one yourself</p>
     </div>
 
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <template x-for="(item, idx) in demoItems" :key="idx">
         <div class="group rounded-xl overflow-hidden bg-cream-50 border border-cream-300/60 shadow-sm hover:shadow-md transition-all duration-200">
           <button
@@ -951,7 +951,7 @@ function app() {
     demoItems: [
       {
         title: 'GPT-OSS launch',
-        subtitle: 'Hassan',
+        subtitle: 'Hassan El Mghari',
         origUrl: '/static/demo/hassan_gpt_oss_en.mp4',
         origLang: 'english',  origCode: 'EN',
         dubUrl:  '/static/demo/hassan_gpt_oss_ko.mp4',
