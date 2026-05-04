@@ -56,6 +56,7 @@ def _make_speech_chunk(
     mix_volume: float = 0.0,
     no_audio: bool = False,
     freeze_extra: float = 0.0,
+    audio_speedup: float = 1.0,
 ) -> None:
     """Extract video segment, speed-adjust to match TTS duration, mux with TTS audio.
 
@@ -101,6 +102,8 @@ def _make_speech_chunk(
         ], check=True, capture_output=True)
         return
 
+    tts_atempo = f"atempo={audio_speedup}," if audio_speedup > 1.001 else ""
+
     vol = max(0.0, min(1.0, mix_volume))
     if vol > 0 and not voiceover:
         atempo = _atempo_chain(speed) if speed != 1.0 else ""
@@ -109,8 +112,14 @@ def _make_speech_chunk(
             f"[0:v]trim=start={fine}:duration={orig_dur},setpts=(PTS-STARTPTS)/{speed}{tpad},fps=fps={fps}[v];"
             f"[0:a]atrim=start={fine}:duration={orig_dur},asetpts=PTS-STARTPTS"
             f"{atempo_part},loudnorm=I=-23:TP=-1.5:LRA=11,volume={vol}[orig];"
-            f"[1:a:0]apad[tts];"
+            f"[1:a:0]{tts_atempo}apad[tts];"
             f"[orig][tts]amix=inputs=2:duration=longest[a]"
+        )
+        maps = ["-map", "[v]", "-map", "[a]"]
+    elif tts_atempo:
+        filter_complex = (
+            f"[0:v]trim=start={fine}:duration={orig_dur},setpts=(PTS-STARTPTS)/{speed}{tpad},fps=fps={fps}[v];"
+            f"[1:a:0]{tts_atempo[:-1]}[a]"  # strip trailing comma
         )
         maps = ["-map", "[v]", "-map", "[a]"]
     else:
@@ -424,17 +433,27 @@ def build_aligned_video(
             clamped_speed = max(vcfg["speed_clamp_min"],
                                 min(vcfg["speed_clamp_max"], orig_dur / tts_dur))
         target_dur = orig_dur / clamped_speed
-        # When TTS is longer than the speed-clamped video, freeze the last
-        # frame to cover the extra so we don't truncate the speech audio.
-        # Threshold at 1 ms — anything smaller is float noise (the math
-        # cancels exactly when unclamped) and ffmpeg refuses zero-length
-        # silence tracks anyway.
-        freeze_extra = tts_dur - target_dur
+        # When TTS is longer than the speed-clamped video we need to either
+        # (1) freeze the last frame to cover the extra, or (2) speed up the
+        # speech a touch with atempo. Long freezes look like the video is
+        # stuck, so we cap the freeze and use atempo for the rest.
+        max_freeze = vcfg.get("max_freeze_s", 0.2)
+        max_speedup = vcfg.get("max_audio_speedup", 1.3)
+        raw_extra = tts_dur - target_dur
+        audio_speedup = 1.0
+        if raw_extra > max_freeze:
+            # Need to compress the TTS so that audio_post = tts_dur / speedup
+            # is at most target_dur + max_freeze. Cap speedup so prosody stays
+            # natural; any residual extra still becomes a (smaller) freeze.
+            needed = tts_dur / (target_dur + max_freeze)
+            audio_speedup = min(needed, max_speedup)
+        effective_tts_dur = tts_dur / audio_speedup
+        freeze_extra = max(0.0, effective_tts_dur - target_dur)
         if freeze_extra < 0.001:
             freeze_extra = 0.0
-        chunk_dur = target_dur + freeze_extra  # = max(target_dur, tts_dur)
+        chunk_dur = target_dur + freeze_extra  # = max(target_dur, effective_tts_dur)
 
-        chunks.append(("speech", (video_path, seg.start, seg.end, tts_path, speech_path, fps, tts_dur, voiceover, mix_vol, no_audio, freeze_extra)))
+        chunks.append(("speech", (video_path, seg.start, seg.end, tts_path, speech_path, fps, tts_dur, voiceover, mix_vol, no_audio, freeze_extra, audio_speedup)))
 
         # m4a: speed-adjusted original audio for target_dur, then silence for
         # the freeze interval (no original audio while video is frozen).
@@ -442,9 +461,9 @@ def build_aligned_video(
         if freeze_extra > 0:
             audio_plan.append(("silence", None, None, freeze_extra, 1.0))
         if no_audio:
-            # Pad/cut TTS to chunk_dur — since chunk_dur = max(target_dur, tts_dur)
-            # this never truncates real speech.
-            video_audio_plan.append(("tts", tts_path, chunk_dur))
+            # Pad/cut TTS to chunk_dur after atempo. chunk_dur is built from
+            # the post-atempo audio length so we never truncate real speech.
+            video_audio_plan.append(("tts", tts_path, chunk_dur, audio_speedup))
 
         new_start = new_time
         new_time += chunk_dur
@@ -512,7 +531,11 @@ def build_aligned_video(
             "-y", intermediate_video,
         ], check=True, capture_output=True)
 
-        video_audio_path = str(tmp_dir / "video_audio.m4a")
+        # Keep the merged audio as PCM WAV — the AAC encode happens once at
+        # mux time, so the priming/encoder-delay metadata is written into the
+        # output MP4 (otherwise `-c:a copy` would carry the priming as audible
+        # silence at the start, shifting all speech ~92 ms behind subtitles).
+        video_audio_path = str(tmp_dir / "video_audio.wav")
         _build_video_audio_track(video_audio_plan, video_path, tmp_dir,
                                  video_audio_path, chunk_workers)
 
@@ -522,7 +545,9 @@ def build_aligned_video(
             "-i", intermediate_video,
             "-i", video_audio_path,
             "-c:v", "copy",
-            "-c:a", "copy",
+            "-c:a", "aac",
+            "-ar", str(_SAMPLE_RATE),
+            "-ac", "1",
             "-map", "0:v:0",
             "-map", "1:a:0",
             "-movflags", "+faststart",
@@ -572,13 +597,18 @@ def _build_video_audio_track(
             _, start, end, volume = entry
             _make_orig_audio_chunk(video_path, start, end, out, speed=1.0, volume=volume)
         else:  # "tts"
-            _, tts_path, target_dur = entry
-            # Re-encode TTS to PCM @ _SAMPLE_RATE; pad/cut to exactly target_dur
-            # so the audio matches the speed-adjusted video chunk length.
+            _, tts_path, target_dur, audio_speedup = entry
+            # Re-encode TTS to PCM @ _SAMPLE_RATE; optionally speed up via
+            # atempo when caller flagged the segment as over-budget, then
+            # pad/cut to exactly target_dur so audio matches video length.
+            af_parts: list[str] = []
+            if audio_speedup > 1.001:
+                af_parts.append(f"atempo={audio_speedup}")
+            af_parts.append(f"apad=whole_dur={target_dur}")
             subprocess.run([
                 FFMPEG_EXE,
                 "-i", tts_path,
-                "-af", f"apad=whole_dur={target_dur}",
+                "-af", ",".join(af_parts),
                 "-c:a", "pcm_s16le", "-ar", str(_SAMPLE_RATE), "-ac", "1",
                 "-t", str(target_dur),
                 "-y", out,
@@ -600,11 +630,12 @@ def _build_video_audio_track(
         for path in audio_chunks:
             f.write(f"file '{path}'\n")
 
+    # Keep as PCM WAV — caller does the AAC encoding at mux time so the MP4
+    # gets correct priming metadata.
     subprocess.run([
         FFMPEG_EXE,
         "-f", "concat", "-safe", "0", "-i", concat_file,
-        "-c:a", "aac", "-ar", str(_SAMPLE_RATE), "-ac", "1",
-        "-movflags", "+faststart",
+        "-c:a", "pcm_s16le", "-ar", str(_SAMPLE_RATE), "-ac", "1",
         "-vn",
         "-y", output_path,
     ], check=True, capture_output=True)

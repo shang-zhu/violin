@@ -1,5 +1,6 @@
 """Cartesia Sonic 3 TTS backend (via Together AI serverless)."""
 
+import re
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -96,7 +97,14 @@ def synthesize_segment(
         language=language,
     )
     response.write_to_file(output_path)
-    tail_ms = _conf.get().get("tts", {}).get("tail_silence_ms", 0)
+    tcfg = _conf.get().get("tts", {})
+    # Longer pause after a sentence-ending mark (period / !? / 。！？) so the
+    # next segment doesn't feel hard-cut against the previous one. Mid-clause
+    # boundaries (commas etc.) keep the short tail to preserve flow.
+    if re.search(r'[.!?。！？]\s*$', text):
+        tail_ms = tcfg.get("sentence_tail_silence_ms", tcfg.get("tail_silence_ms", 0))
+    else:
+        tail_ms = tcfg.get("tail_silence_ms", 0)
     _append_silence(output_path, tail_ms)
     return output_path
 
