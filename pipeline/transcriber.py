@@ -40,6 +40,32 @@ _FRAGMENT_START_RE = re.compile(r'^[a-z]|^[A-Z][\s一-鿿]')
 _SENTENCE_SPLIT_RE = re.compile(r'[^.!?。！？]*[.!?。！？]+(?!\d)\s*')
 _PROTECTED_PERIOD = re.compile(r'(?<=\w)\.(?=\w)')  # decimal / abbreviation: 2.0, e.g, U.S
 
+# Clause-level punctuation for soft-splitting long sub-sentences (Chinese commas
+# 、，；, English , ;).  We only break here when a sentence-level part exceeds
+# max_subtitle_chars, to keep individual subtitle lines short and readable.
+_SOFT_SPLIT_RE = re.compile(r'[,，;；、]')
+
+
+def _soft_split_long(text: str, max_chars: int) -> list[str]:
+    """Recursively split *text* at clause punctuation when it exceeds max_chars.
+
+    Picks the punctuation closest to the midpoint each time so the resulting
+    pieces stay roughly balanced. If no soft punctuation is available, returns
+    the text unchanged.
+    """
+    if len(text) <= max_chars:
+        return [text]
+    matches = list(_SOFT_SPLIT_RE.finditer(text))
+    if not matches:
+        return [text]
+    mid = len(text) / 2
+    best = min(matches, key=lambda m: abs(m.end() - mid))
+    left = text[:best.end()].rstrip()
+    right = text[best.end():].lstrip()
+    if not left or not right:
+        return [text]
+    return _soft_split_long(left, max_chars) + _soft_split_long(right, max_chars)
+
 # Minimum speech duration — shorter segments are almost always noise
 _MIN_DURATION = 0.8  # seconds
 
@@ -160,6 +186,37 @@ def _g(s: dict | object, key: str, default=None):
     return getattr(s, key, default)
 
 
+_ABBREVIATION_WHITELIST = frozenset({
+    "mr.", "mrs.", "ms.", "dr.", "prof.", "sr.", "jr.", "st.",
+    "u.s.", "u.s.a.", "u.k.", "e.u.",
+    "etc.", "vs.", "i.e.", "e.g.", "approx.", "incl.", "cf.", "ca.",
+    "inc.", "ltd.", "corp.", "co.", "no.", "vol.",
+    "fig.", "eq.", "ref.", "ed.", "p.m.", "a.m.",
+})
+
+
+def _is_sentence_end(word: str) -> bool:
+    """True when *word* ends with terminal punctuation that isn't an abbreviation.
+
+    Avoids treating "U.S.", "etc.", "Mr.", "vs." etc. as sentence boundaries —
+    otherwise the word-level segmenter would split mid-thought, leaving the
+    next sub-segment with an unrealistically short orig_dur and forcing the
+    aligner into freeze/atempo territory.
+    """
+    stripped = word.rstrip()
+    if not re.search(r'[.!?。！？]\s*$', stripped):
+        return False
+    # CJK terminal punctuation is unambiguous.
+    if stripped.endswith(("。", "！", "？")):
+        return True
+    if stripped.endswith(("!", "?")):
+        return True
+    # English period: only a sentence end if the trailing token isn't a
+    # known abbreviation. Compare lowercased to handle "U.S." vs "u.s.".
+    last_token = stripped.split()[-1].lower() if stripped.split() else ""
+    return last_token not in _ABBREVIATION_WHITELIST
+
+
 def _split_words_into_sentences(words: list, offset: float = 0.0) -> list[Segment]:
     """Build sentence-level Segment objects from word-level timestamps.
 
@@ -178,8 +235,9 @@ def _split_words_into_sentences(words: list, offset: float = 0.0) -> list[Segmen
         if not word.strip():
             continue
         current_words.append(w)
-        # Sentence ends when the word ends with terminal punctuation.
-        if re.search(r'[.!?。！？]\s*$', word.rstrip()):
+        # Sentence ends when the word ends with terminal punctuation,
+        # excluding common abbreviations (Mr., U.S., etc.).
+        if _is_sentence_end(word):
             start = _g(current_words[0], "start") + offset
             end = _g(current_words[-1], "end") + offset
             text = " ".join((_g(w2, "word") or "").strip() for w2 in current_words).strip()
@@ -338,7 +396,13 @@ def split_into_sentences(segments: list[Segment]) -> list[Segment]:
     Time is distributed across sentences proportionally by character count — a
     reasonable proxy for speech duration. After TTS, each sentence chunk gets its
     own speed-adjusted video slice, giving subtitles that match actual speech.
+
+    When ``merge.max_subtitle_chars`` is set in config, sub-sentences longer
+    than that threshold are further split at clause punctuation (、，；,;) so
+    individual subtitle lines stay readable.
     """
+    max_chars = _conf.get()["merge"].get("max_subtitle_chars", 0) or 0
+
     result: list[Segment] = []
 
     _PLACEHOLDER = "\x00"
@@ -353,6 +417,13 @@ def split_into_sentences(segments: list[Segment]) -> list[Segment]:
             parts.append(remainder)
         # Restore protected periods and strip whitespace.
         parts = [p.replace(_PLACEHOLDER, ".").strip() for p in parts if p.strip()]
+
+        # Soft-split any part that's still too long for a single subtitle line.
+        if max_chars > 0:
+            soft_parts: list[str] = []
+            for p in parts:
+                soft_parts.extend(_soft_split_long(p, max_chars))
+            parts = soft_parts
 
         if len(parts) <= 1:
             result.append(seg)

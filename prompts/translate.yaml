@@ -12,9 +12,22 @@ batch_user: |
   - Return a JSON object with a "translations" array of exactly {num_segments} strings.
   - Each segment gets exactly one translation. Never merge or split segments.
   - Sentence fragments are fine — translate them as-is.
-  - Write entirely in {target_language}. Only keep widely recognized abbreviations (e.g., GPT, API, URL, Python, PyTorch) in English.
-  - Translate all other English words, including technical terms, using their standard {target_language} equivalents.
   - Sound natural — write the way a native {target_language} speaker would explain the same idea.
+
+  CRITICAL — no code-switching:
+  - The output must be 100% in {target_language}. Do NOT leave any source-language
+    word in the translation unless it falls into one of the narrow exceptions below.
+  - Translate EVERY ordinary word (adverbs, adjectives, verbs, common nouns) into
+    its natural {target_language} equivalent — including words like "broadly",
+    "exactly", "dramatically", "basically", "essentially", "particularly",
+    "fundamentally", "actually", "generally". These are common vocabulary, not
+    technical terms.
+  - The ONLY items allowed to remain in the source language:
+    · Product / model / library / framework names (e.g. GPT, Claude, Python, PyTorch, React, Linux, Docker)
+    · Standard technical acronyms (e.g. API, URL, JSON, HTTP, SDK, CPU, GPU, RAM)
+    · Personal names and place names without an established {target_language} form
+  - Before returning, re-read each translation: replace any remaining source-language
+    word that isn't in the allow-list above with its {target_language} equivalent.
   {asr_corrections_block}
   Segments ({num_segments} total):
   {numbered_segments}
@@ -34,8 +47,14 @@ batch_user_styled: |
   - Return a JSON object with a "translations" array of exactly {num_segments} strings.
   - Each segment gets exactly one translation. Never merge or split segments.
 
-  Language:
-  - Write entirely in {target_language}. Only keep widely recognized abbreviations (e.g., GPT, API, URL, Python) in English.
+  Language — no code-switching:
+  - Output must be 100% in {target_language}. Translate every ordinary word
+    (adverbs, adjectives, verbs, common nouns); do NOT leave them in the source
+    language even if they appear technical-sounding.
+  - The only items that may remain in the source language: product / model /
+    library names (GPT, Python, PyTorch, etc.), standard tech acronyms
+    (API, URL, JSON, etc.), and personal / place names without an established
+    {target_language} form.
   - Sound natural for {target_language} speakers.
 
   Style:
@@ -51,7 +70,16 @@ single_system: |
 
 single_user: |
   Translate the following text from {source_language} to {target_language}.
-  Write entirely in {target_language}. Sound natural. Sentence fragments are fine — translate as-is.
+  Sound natural. Sentence fragments are fine — translate as-is.
+
+  No code-switching:
+  - Output must be 100% in {target_language}. Translate every ordinary word
+    (adverbs, adjectives, verbs, common nouns) — do NOT leave them in the source
+    language even if they sound technical.
+  - The only items that may remain in the source language: product / model /
+    library names (GPT, Python, PyTorch, etc.), standard tech acronyms
+    (API, URL, JSON, etc.), and personal / place names without an established
+    {target_language} form.
   {asr_corrections_block}
   Text: {text}
 
@@ -64,6 +92,15 @@ single_system_styled: |
 single_user_styled: |
   Translate/rewrite the following text from {source_language} to {target_language}.
   Follow the style instructions above — they override normal translation rules.
-  Write entirely in {target_language}. If the text is a sentence fragment, handle it as one unit.
+  If the text is a sentence fragment, handle it as one unit.
+
+  No code-switching:
+  - Output must be 100% in {target_language}. Translate every ordinary word
+    (adverbs, adjectives, verbs, common nouns); do NOT leave them in the source
+    language even if they sound technical.
+  - The only items that may remain in the source language: product / model /
+    library names (GPT, Python, PyTorch, etc.), standard tech acronyms
+    (API, URL, JSON, etc.), and personal / place names without an established
+    {target_language} form.
 
   Text: {text}

@@ -48,7 +48,8 @@ translation:
 # ── TTS ─────────────────────────────────────────────────────
 tts:
   workers: 1
-  tail_silence_ms: 80   # silence appended to each TTS clip to soften segment boundaries
+  tail_silence_ms: 120              # (ms) silence after segments ending in a comma / mid-clause break (keeps speech flowing)
+  sentence_tail_silence_ms: 250    # (ms) silence after a sentence-ending mark (period/!?/。！？) — longer to feel natural
 
 # ── Pipeline defaults ───────────────────────────────────────────
 pipeline:
@@ -177,8 +178,9 @@ transcription:
 
 # ── Segment merging (combine Whisper fragments into sentences) ──
 merge:
-  max_gap: 1.0        # seconds — merge if gap between segments is smaller
-  max_duration: 60.0   # seconds — never merge beyond this total length
+  max_gap: 1.0           # seconds — merge if gap between segments is smaller
+  max_duration: 60.0     # seconds — never merge beyond this total length
+  max_subtitle_chars: 20 # split sub-sentences longer than this at clause punctuation (、，；,;)
 
 # ── Video merge / alignment ─────────────────────────────────
 merge_video:
@@ -187,6 +189,8 @@ merge_video:
   min_gap: 0.05        # seconds — skip gap chunks shorter than this
   speed_clamp_min: 0.5
   speed_clamp_max: 2.5
+  max_freeze_s: 0.2       # cap on frozen-frame duration when TTS is much longer than the speed-clamped video; beyond this the audio is sped up via atempo instead
+  max_audio_speedup: 1.3  # ceiling on atempo applied to TTS to compensate for over-budget speech (1.0 = no speedup, 1.3 ≈ podcast 1.3×)
   crf: 23
   preset: "ultrafast"
   voiceover_volume: 0.1  # 0.0–1.0 — original audio level for CLI voiceover mode
