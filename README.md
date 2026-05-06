@@ -258,6 +258,16 @@ export ELEVENLABS_API_KEY="..."    # only needed for config/prod.yaml
 
 Reload (`source ~/.zshrc`) and `violin` will pick the keys up from anywhere.
 
+## TODO
+
+- [ ] Publish to PyPI so `uv tool install violin` works without `git clone`. Checklist:
+  - Check name availability at https://pypi.org/project/violin/ (rename if taken)
+  - `uv build` → confirm `config/`, `prompts/`, `main.py`, `run_api.py` are in `dist/*.whl`
+  - Smoke-test the wheel in a fresh venv from outside the repo
+  - Register PyPI account + API token (try TestPyPI first via `--publish-url https://test.pypi.org/legacy/`)
+  - `uv publish`
+  - Update the install section above to use `uv tool install violin` (drop the `.`)
+
 ## License
 
 MIT
