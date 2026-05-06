@@ -1,0 +1,20 @@
+# Production overrides — premium models (OpenAI translation, ElevenLabs TTS)
+# with high per-job ffmpeg parallelism. Jobs are serialized at the API layer
+# to keep the ffmpeg multiplier bounded.
+# Only fields listed here override default.yaml; everything else inherits.
+# Load with:  uvicorn api.main:app  +  CONFIG=config/prod.yaml
+# (or wherever the launcher reads the config path).
+
+# ── Models ──────────────────────────────────────────────────
+models:
+  transcription: "openai/whisper-large-v3"
+  translation:
+    # provider: together                  # "openai" or "together"
+    # model: Qwen/Qwen3.5-397B-A17B
+    provider: openai
+    model: gpt-5.4-mini
+  tts:
+    # provider: cartesia                # "cartesia" or "elevenlabs"
+    # model: cartesia/sonic-3
+    provider: elevenlabs
+    model: eleven_v3

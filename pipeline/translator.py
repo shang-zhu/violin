@@ -41,7 +41,12 @@ def _asr_corrections_block() -> str:
     if not corrections:
         return ""
     lines = "\n".join(f"  - {c}" for c in corrections)
-    return f"\nASR correction hints (the speech recogniser may have mistranscribed these — fix them during translation):\n{lines}\n"
+    return (
+        "\nPre-translation text fixes (apply each as a literal find-and-replace "
+        "on the SOURCE before translating; do not include the left-side form "
+        "in your output):\n"
+        f"{lines}\n"
+    )
 
 BATCH_SCHEMA = {
     "type": "object",

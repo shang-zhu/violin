@@ -1,30 +1,18 @@
-# Production overrides for small EC2 instances (e.g. t3.medium 4GB / c7g.large 4GB).
+# Production overrides — premium models (OpenAI translation, ElevenLabs TTS)
+# with high per-job ffmpeg parallelism. Jobs are serialized at the API layer
+# to keep the ffmpeg multiplier bounded.
 # Only fields listed here override default.yaml; everything else inherits.
 # Load with:  uvicorn api.main:app  +  CONFIG=config/prod.yaml
 # (or wherever the launcher reads the config path).
 
 # ── Concurrency ─────────────────────────────────────────────
 # Each ffmpeg process uses ~300MB RAM. Total processes = api.max_workers ×
-# merge_video.workers. On 4GB RAM keep total ≤ 4 (~1.2GB) to leave headroom
-# for the Python process and OS.
-models:
-  transcription: "openai/whisper-large-v3"
-  translation:
-    provider: together                  # "openai" or "together"
-    model: deepseek-ai/DeepSeek-V4-Pro #Qwen/Qwen3.5-397B-A17B
-    # provider: openai
-    # model: gpt-5.4-mini
-  tts:
-    provider: cartesia                # "cartesia" or "elevenlabs"
-    model: cartesia/sonic-3
-    # provider: elevenlabs
-    # model: eleven_v3
-
+# merge_video.workers = 1 × 16 = 16 (~4.8GB peak during merge stage).
 merge_video:
-  workers: 4
+  workers: 16
   preset: "ultrafast"        # already default — fastest x264 path, lowest CPU
 
 api:
   max_workers: 1             # serialize jobs to avoid the multiplier blowing up RAM
   free_trial_jobs: 1         # jobs allowed per IP without a user-provided API key (0 = unlimited)
-  url_upload: false           # don't allow users to paste video URLs (yt-dlp); set true to enable
+  url_upload: false          # don't allow users to paste video URLs (yt-dlp); set true to enable
