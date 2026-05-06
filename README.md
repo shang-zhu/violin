@@ -235,7 +235,9 @@ This repo ships a [Claude Code skill](https://code.claude.com/docs/en/skills) at
 
 > Translate examples/lecture.mp4 to Chinese with the academic style
 
-Claude loads the skill automatically, picks the right config / style, runs pre-flight checks (input file exists, required API keys are set), invokes `violin` (or `uv run main.py` if not yet installed globally), and reports the cost summary at the end.
+Claude loads the skill automatically, picks the right style, runs pre-flight checks (input file exists, `TOGETHER_API_KEY` is set), invokes `violin` (or `uv run main.py` if not yet installed globally), and reports the cost summary at the end.
+
+The skill is intentionally scoped to the **default Together + Cartesia stack** only — it doesn't try to switch to OpenAI / ElevenLabs. If you want premium models or custom configs, clone the repo and use the CLI directly with `--config config/prod.yaml`.
 
 ### Global skill (any directory)
 
@@ -247,19 +249,23 @@ cp -r .claude/skills/video-translator ~/.claude/skills/
 
 After that, `claude` running anywhere will recognize requests like "dub this video" or "generate Chinese subtitles for X.mp4" and call `violin` with the right flags.
 
-**API keys outside the repo.** The project-local `.env` is only auto-loaded when you run `violin` from inside the repo. For the global skill to work in any directory, export the keys in your shell rc file instead:
+**API keys outside the repo.** The project-local `.env` is only auto-loaded when you run `violin` from inside the repo. For the global skill (which only uses the default Together + Cartesia stack), export the one required key in your shell rc file instead:
 
 ```bash
 # ~/.zshrc or ~/.bashrc
 export TOGETHER_API_KEY="..."
-export OPENAI_API_KEY="..."        # only needed for config/prod.yaml
-export ELEVENLABS_API_KEY="..."    # only needed for config/prod.yaml
 ```
 
-Reload (`source ~/.zshrc`) and `violin` will pick the keys up from anywhere.
+Reload (`source ~/.zshrc`) and `violin` will pick the key up from anywhere.
 
 ## TODO
 
+- [ ] Test the Claude Code skill end-to-end. Checklist:
+  - **Project-level**: in the repo with `.env` populated, run `claude`, say "translate examples/<file>.mp4 to Chinese". Verify the skill auto-loads, pre-flight finds `TOGETHER_API_KEY`, and `violin` (or `uv run main.py`) is invoked with sensible flags.
+  - **User-level**: `cp -r .claude/skills/video-translator ~/.claude/skills/`, then `cd /tmp && claude`. With `TOGETHER_API_KEY` exported in `~/.zshrc`, verify the skill triggers and runs.
+  - **Negative case**: unset `TOGETHER_API_KEY` and confirm the skill stops with a clear "set the key in `.env` / `~/.zshrc`" message instead of running a doomed command.
+  - **Style routing**: try requests like "translate this for kids", "translate this in news anchor style" and verify Claude picks the right `--style`.
+  - **Premium pushback**: ask for "best quality with OpenAI / ElevenLabs" — verify the skill refuses and points the user back to the repo with `--config config/prod.yaml`.
 - [ ] Publish to PyPI so `uv tool install violin` works without `git clone`. Checklist:
   - Check name availability at https://pypi.org/project/violin/ (rename if taken)
   - `uv build` → confirm `config/`, `prompts/`, `main.py`, `run_api.py` are in `dist/*.whl`
