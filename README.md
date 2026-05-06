@@ -196,6 +196,68 @@ Violin/
 - **Long videos** — translation is batched in chunks of 60 segments; no hard length limit
 - **API job storage** — jobs persist in `jobs/` across server restarts; clean up with `DELETE /jobs/{id}` or by removing the directory
 
+## Install as a global CLI
+
+The instructions above get you a working dev checkout (`uv run main.py …`). To install `violin` and `violin-api` as system-wide commands you can run from anywhere:
+
+```bash
+# From inside the repo
+uv tool install .
+
+# Or, while developing — links to your source so edits take effect immediately
+uv tool install --editable .
+```
+
+After installing:
+
+```bash
+violin lecture.mp4 lecture_zh.mp4 --language Chinese
+violin-api --port 8000
+```
+
+Update after pulling new changes:
+
+```bash
+uv tool install . --reinstall
+```
+
+Uninstall:
+
+```bash
+uv tool uninstall violin
+```
+
+The bundled `config/default.yaml` and `config/prod.yaml` are packaged into the install, so `violin` works correctly from any directory.
+
+## Use with Claude Code
+
+This repo ships a [Claude Code skill](https://code.claude.com/docs/en/skills) at `.claude/skills/video-translator/`. After cloning the repo and configuring `.env`, run `claude` in the project directory and describe the task in natural language:
+
+> Translate examples/lecture.mp4 to Chinese with the academic style
+
+Claude loads the skill automatically, picks the right config / style, runs pre-flight checks (input file exists, required API keys are set), invokes `violin` (or `uv run main.py` if not yet installed globally), and reports the cost summary at the end.
+
+### Global skill (any directory)
+
+If you've installed `violin` globally (see above), you can copy the skill to your user-level skills directory so it loads in **any** Claude Code session, not just inside this repo:
+
+```bash
+cp -r .claude/skills/video-translator ~/.claude/skills/
+```
+
+After that, `claude` running anywhere will recognize requests like "dub this video" or "generate Chinese subtitles for X.mp4" and call `violin` with the right flags.
+
+**API keys outside the repo.** The project-local `.env` is only auto-loaded when you run `violin` from inside the repo. For the global skill to work in any directory, export the keys in your shell rc file instead:
+
+```bash
+# ~/.zshrc or ~/.bashrc
+export TOGETHER_API_KEY="..."
+export OPENAI_API_KEY="..."        # only needed for config/prod.yaml
+export ELEVENLABS_API_KEY="..."    # only needed for config/prod.yaml
+```
+
+Reload (`source ~/.zshrc`) and `violin` will pick the keys up from anywhere.
+
 ## License
 
 MIT
