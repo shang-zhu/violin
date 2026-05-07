@@ -9,7 +9,7 @@
 # Each ffmpeg process uses ~300MB RAM. Total processes = api.max_workers ×
 # merge_video.workers = 1 × 16 = 16 (~4.8GB peak during merge stage).
 merge_video:
-  workers: 16
+  workers: 4
   preset: "ultrafast"        # already default — fastest x264 path, lowest CPU
 
 api:
