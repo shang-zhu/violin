@@ -335,8 +335,10 @@
         <!-- File drop zone -->
         <div
           x-show="inputMode === 'file'"
-          class="border-2 border-dashed border-cream-300 rounded-xl p-8 text-center cursor-pointer transition-all duration-200 hover:border-gold-300 hover:bg-gold-50/40 mb-6"
-          :class="{ 'drop-zone-active': dragover }"
+          class="border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-200 mb-6"
+          :class="file
+            ? 'border-emerald-300 bg-emerald-50/60'
+            : (dragover ? 'border-gold-300 bg-gold-50/40 drop-zone-active' : 'border-cream-300 hover:border-gold-300 hover:bg-gold-50/40')"
           @dragover.prevent="dragover = true"
           @dragleave.prevent="dragover = false"
           @drop.prevent="onDrop($event)"
@@ -358,11 +360,12 @@
 
           <template x-if="file">
             <div>
-              <div class="w-14 h-14 rounded-2xl bg-gold-50 border border-gold-200 flex items-center justify-center mx-auto mb-4">
-                <svg class="w-7 h-7 text-gold-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <div class="w-14 h-14 rounded-2xl bg-emerald-100 border border-emerald-200 flex items-center justify-center mx-auto mb-4">
+                <svg class="w-7 h-7 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
+              <p class="text-[11px] font-semibold uppercase tracking-wider text-emerald-600 mb-1.5">Ready to translate</p>
               <p class="text-sm font-semibold text-ink-800 truncate max-w-xs mx-auto" x-text="file.name"></p>
               <p class="text-xs text-ink-400 mt-1" x-text="formatSize(file.size)"></p>
               <button class="mt-3 text-xs text-accent-400 hover:text-accent-500 underline underline-offset-2" @click.stop="clearFile()">change file</button>
@@ -660,7 +663,19 @@
 
       <!-- ── PHASE: done ── -->
       <div x-show="phase === 'done'" class="slide-up overflow-hidden">
-        <div x-ref="videoWrap" class="video-wrap rounded-2xl overflow-hidden bg-black" style="container-type:inline-size">
+        <!-- Top bar: prominent back button -->
+        <div class="flex items-center justify-between px-5 pt-4 pb-3">
+          <button
+            @click="reset()"
+            class="inline-flex items-center gap-2 px-3.5 py-2 rounded-full text-sm font-semibold text-ink-700 bg-cream-50 hover:bg-gold-50 border border-cream-300 hover:border-gold-300 hover:text-gold-600 shadow-sm transition-all duration-200 active:scale-[0.98]"
+          >
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2.2" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+            </svg>
+            Translate another video
+          </button>
+        </div>
+        <div x-ref="videoWrap" class="video-wrap overflow-hidden bg-black" style="container-type:inline-size">
           <video
             x-ref="player"
             class="w-full block no-fs-btn"
@@ -752,15 +767,6 @@
               </a>
             </template>
 
-            <button
-              @click="reset()"
-              class="flex items-center justify-center gap-2 py-2.5 px-5 bg-cream-200 hover:bg-cream-300 text-ink-700 rounded-full font-semibold text-sm border border-cream-300 transition-all duration-200 active:scale-[0.98]"
-            >
-              <svg class="w-4 h-4 text-ink-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-              </svg>
-              Translate another
-            </button>
           </div>
         </div>
       </div>
