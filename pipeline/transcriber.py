@@ -1,16 +1,17 @@
-"""Transcribe audio using Together AI's Whisper Large v3."""
+"""Transcribe audio with Whisper — provider chosen via config (Together or OpenAI)."""
 
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import httpx
-from together import Together
 
 from . import config as _conf
 from .extractor import split_audio
+from .llm_client import get_transcription_model
 
 _MAX_RETRIES = 3
 _RETRY_BACKOFF = [5, 15, 30]
@@ -258,7 +259,7 @@ def _split_words_into_sentences(words: list, offset: float = 0.0) -> list[Segmen
 
 def _transcribe_single(
     audio_path: str,
-    client: Together,
+    client: Any,
     model: str,
 ) -> list[Segment]:
     """Transcribe a single audio file (must be small enough for the API)."""
@@ -340,7 +341,7 @@ def _dedup_overlap(segments: list[Segment]) -> list[Segment]:
 
 def transcribe(
     audio_path: str,
-    client: Together,
+    client: Any,
 ) -> list[Segment]:
     """Return clean, timestamped segments from audio file.
 
@@ -348,7 +349,7 @@ def transcribe(
     transcribed in parallel, and stitched back together.
     """
     cfg = _conf.get()
-    model = cfg["models"]["transcription"]
+    model = get_transcription_model(cfg)
     tcfg = cfg.get("transcription", {})
     chunk_seconds = tcfg.get("chunk_seconds", 600)
     workers = tcfg.get("parallel_workers", _DEFAULT_TRANSCRIBE_WORKERS)

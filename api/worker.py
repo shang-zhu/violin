@@ -15,7 +15,7 @@ from together import Together
 from pipeline import config as pipeline_config
 from pipeline.extractor import extract_audio, get_video_duration
 from pipeline.languages import language_code
-from pipeline.llm_client import make_translation_client
+from pipeline.llm_client import make_transcription_client, make_translation_client
 from pipeline.merger import build_aligned_video, build_gap_chunks, generate_srt, prepare_merge
 from pipeline.styles import resolve as resolve_style
 from pipeline.transcriber import merge_continuous_segments, split_into_sentences, transcribe
@@ -93,6 +93,11 @@ def _run_job(
             together_key_override=together_key_override,
             openai_key_override=openai_key_override,
         )
+        transcription_client = make_transcription_client(
+            cfg,
+            together_key_override=together_key_override,
+            openai_key_override=openai_key_override,
+        )
         tmp_dir = Path(tempfile.mkdtemp(prefix=f"vidtrans_{job_id}_"))
 
         try:
@@ -103,7 +108,7 @@ def _run_job(
 
             _check_cancelled(job_id)
             _progress(job_id, 2, f"Transcribing with Whisper Large v3… (video duration: {total_duration:.0f}s)")
-            segments = transcribe(audio_path, client)
+            segments = transcribe(audio_path, transcription_client)
 
             lang_code = language_code(target_language)
 

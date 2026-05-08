@@ -1,4 +1,4 @@
-"""Factory for translation LLM clients — supports Together AI and OpenAI."""
+"""Factory for translation + transcription clients — supports Together AI and OpenAI."""
 
 from __future__ import annotations
 
@@ -52,6 +52,61 @@ def make_translation_client(
     Each falls back to the corresponding environment variable if not provided.
     """
     provider, _ = _parse_translation_config(cfg)
+
+    if provider == "openai":
+        from openai import OpenAI
+        api_key = openai_key_override or os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            raise RuntimeError("OPENAI_API_KEY environment variable is not set.")
+        return OpenAI(api_key=api_key)
+
+    from together import Together
+    api_key = together_key_override or os.environ.get("TOGETHER_API_KEY")
+    if not api_key:
+        raise RuntimeError("TOGETHER_API_KEY environment variable is not set.")
+    return Together(api_key=api_key)
+
+
+def _parse_transcription_config(cfg: dict[str, Any]) -> tuple[str, str]:
+    """Return (provider, model) from the models.transcription config entry.
+
+    Supports both the new dict format and the legacy plain-string format:
+        # new
+        transcription:
+          provider: openai
+          model: whisper-1
+        # legacy (treated as together)
+        transcription: "openai/whisper-large-v3"
+    """
+    entry = cfg["models"]["transcription"]
+    if isinstance(entry, dict):
+        return entry.get("provider", "together"), entry["model"]
+    return "together", entry
+
+
+def get_transcription_model(cfg: dict[str, Any]) -> str:
+    _, model = _parse_transcription_config(cfg)
+    return model
+
+
+def get_transcription_provider(cfg: dict[str, Any]) -> str:
+    provider, _ = _parse_transcription_config(cfg)
+    return provider
+
+
+def make_transcription_client(
+    cfg: dict[str, Any],
+    *,
+    together_key_override: str | None = None,
+    openai_key_override: str | None = None,
+):
+    """Create the appropriate Whisper client based on the transcription provider config.
+
+    The resulting client exposes `audio.transcriptions.create(...)` — both the
+    Together and OpenAI SDKs share that surface, so the transcriber code does
+    not need to branch.
+    """
+    provider, _ = _parse_transcription_config(cfg)
 
     if provider == "openai":
         from openai import OpenAI

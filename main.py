@@ -27,7 +27,7 @@ from together import Together
 from pipeline import config as pipeline_config
 from pipeline.costs import CostTracker
 from pipeline.languages import language_code as _language_code
-from pipeline.llm_client import make_translation_client
+from pipeline.llm_client import make_transcription_client, make_translation_client
 from pipeline.styles import StyleProfile, list_styles, resolve as resolve_style
 from pipeline.tts import native_voices_for
 from pipeline.extractor import extract_audio, get_video_duration
@@ -66,6 +66,7 @@ def translate_video(
     source_language: str = "auto-detect",
     style: StyleProfile | None = None,
     voiceover: bool = True,
+    timings_out: str | None = None,
 ) -> None:
     api_key = os.environ.get("TOGETHER_API_KEY")
     if not api_key:
@@ -74,6 +75,7 @@ def translate_video(
     client = Together(api_key=api_key)
     cfg = pipeline_config.get()
     translation_client = make_translation_client(cfg)
+    transcription_client = make_transcription_client(cfg)
     tmp_dir = Path(tempfile.mkdtemp(prefix="vidtrans_"))
     tracker = CostTracker()
 
@@ -93,7 +95,7 @@ def translate_video(
         tracker.record_step("Audio extraction")
 
         print("\n[2/5] Transcribing with Whisper Large v3...")
-        segments = transcribe(audio_path, client)
+        segments = transcribe(audio_path, transcription_client)
         print(f"      {len(segments)} segments found")
         tracker.audio_minutes = total_duration / 60.0
         tracker.record_step("Transcription (Whisper)")
@@ -176,6 +178,17 @@ def translate_video(
         print(f"\nDone! Output → {output_path}")
         tracker.print_summary()
 
+        if timings_out:
+            import json
+            steps = list(tracker._steps)
+            payload = {
+                "total": sum(s["elapsed"] for s in steps),
+                "steps": steps,
+                "cost": tracker.cost_breakdown(),
+            }
+            Path(timings_out).write_text(json.dumps(payload, indent=2) + "\n")
+            print(f"      Timings → {timings_out}")
+
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
@@ -219,6 +232,10 @@ def main() -> None:
         "--config", "-c", default=None,
         help="Path to a YAML config file (overrides config/default.yaml)"
     )
+    parser.add_argument(
+        "--timings-out", default=None,
+        help="Write per-step wall-clock timings as JSON to this path on success"
+    )
 
     args = parser.parse_args()
 
@@ -250,6 +267,7 @@ def main() -> None:
         args.source_language,
         style,
         voiceover,
+        timings_out=args.timings_out,
     )
 
 

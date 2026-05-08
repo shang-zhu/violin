@@ -3,7 +3,9 @@
 
 # ── Models ──────────────────────────────────────────────────
 models:
-  transcription: "openai/whisper-large-v3"
+  transcription:
+    provider: together                  # "together" or "openai"
+    model: openai/whisper-large-v3      # for openai use "whisper-1"
   translation:
     provider: together                  # "openai" or "together"
     model: deepseek-ai/DeepSeek-V4-Pro
@@ -18,12 +20,17 @@ models:
 
 # ── Pricing ──────────────────────────────────────────────────
 pricing:
-  whisper_per_minute: 0.0015          # Together AI Whisper
+  whisper:
+    together: 0.0015                  # Together AI Whisper Large v3, per audio minute
+    openai: 0.006                     # OpenAI whisper-1, per audio minute
+  whisper_per_minute: 0.0015          # legacy flat key — kept for backward compat
   tts:
     cartesia:
       per_m_characters: 65.00         # Together AI Cartesia Sonic 3
     elevenlabs:
       per_m_characters: 165.00        # ElevenLabs eleven_v3 (~$0.165 / 1k chars on Creator tier)
+    openai:
+      per_m_characters: 30.00         # tts-1-hd ($30/1M); tts-1 is $15/1M — adjust if model changed
   translation:
     together:                          # Together AI serverless
       per_m_input_tokens: 0.30
