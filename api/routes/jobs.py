@@ -8,6 +8,7 @@ from pathlib import Path
 from fastapi import APIRouter, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
+from api.config import MAX_DURATION_SECONDS, MAX_FILE_SIZE_MB
 from api.models import JobResponse, JobStatus
 from api.storage import create_job, delete_job, get_job, input_path, output_video_path
 from api.usage import has_free_trial, record_usage, remaining_trials
@@ -16,7 +17,20 @@ from api.worker import submit_job, submit_url_job
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 _ALLOWED_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"}
-_MAX_DURATION_SECONDS = 1800
+
+
+def _probe_duration(path: Path) -> float | None:
+    """Return media duration via ffprobe, or None if it can't be read."""
+    import subprocess
+    try:
+        out = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=nw=1:nk=1", str(path)],
+            capture_output=True, text=True, check=True, timeout=20,
+        ).stdout.strip()
+        return float(out) if out else None
+    except (subprocess.SubprocessError, ValueError):
+        return None
 
 
 def _client_ip(request: Request) -> str:
@@ -73,7 +87,29 @@ async def create_translation_job(
     from api.storage import _job_dir
     dest = _job_dir(job_id) / f"input{suffix}"
     content = await file.read()
+
+    # File-size cap — cheaper to check before writing.
+    if MAX_FILE_SIZE_MB > 0 and len(content) > MAX_FILE_SIZE_MB * 1024 * 1024:
+        delete_job(job_id)
+        size_mb = len(content) / (1024 * 1024)
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large ({size_mb:.0f} MB). Max {MAX_FILE_SIZE_MB} MB.",
+        )
+
     dest.write_bytes(content)
+
+    # Duration cap — need the file on disk for ffprobe to read it.
+    if MAX_DURATION_SECONDS > 0:
+        duration = _probe_duration(dest)
+        if duration is not None and duration > MAX_DURATION_SECONDS:
+            delete_job(job_id)
+            mins = duration / 60
+            limit_min = MAX_DURATION_SECONDS // 60
+            raise HTTPException(
+                status_code=413,
+                detail=f"Video too long ({mins:.1f} min). Max {limit_min} min.",
+            )
 
     submit_job(
         job_id,

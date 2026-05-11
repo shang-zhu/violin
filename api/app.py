@@ -51,8 +51,12 @@ def root():
 
 @app.get("/app-config", include_in_schema=False)
 def app_config():
-    from .config import URL_UPLOAD
-    return {"url_upload": URL_UPLOAD}
+    from .config import MAX_DURATION_SECONDS, MAX_FILE_SIZE_MB, URL_UPLOAD
+    return {
+        "url_upload": URL_UPLOAD,
+        "max_duration_seconds": MAX_DURATION_SECONDS,
+        "max_file_size_mb": MAX_FILE_SIZE_MB,
+    }
 
 
 @app.on_event("startup")
