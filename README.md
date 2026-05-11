@@ -4,6 +4,7 @@
 <!-- > Translate educational videos from one language to another using [Together AI](https://www.together.ai). Replaces the audio track with a dubbed voice in the target language and generates a subtitle file — available as a CLI or a REST API. -->
 
 ## 🌟 Quick Start
+- Python
 ```bash
 uv run main.py assets/demo_en.mp4 assets/emo_zh.mp4 --language Chinese
 #example video can be downloaded here: https://html5.stanford.edu/videos/courses/see/CS229/CS229-lecture01.mp4 (Note that you need to trim it to reduce the cost)
@@ -11,11 +12,14 @@ uv run main.py assets/demo_en.mp4 assets/emo_zh.mp4 --language Chinese
 #PYTHONUNBUFFERED=1 uv run main.py examples/CS229-lecture01.mp4 examples/CS229-lecture01_zh.mp4 --language Chinese 2>&1 | tee out.log
 ```
 
-or based on SKILL.md
+- `SKILL.md`
 
 ```bash
-please use the violin skill help me translate the video assets/demo_en.mp4 into Chinese language.
+> please use the violin skill help me translate the video assets/demo_en.mp4 into Chinese language.
 ```
+
+Expected outcome:
+![alt text](assets/outcome.png)
 
 ---
 
