@@ -138,25 +138,51 @@ Internet → Caddy (:80/:443, auto-HTTPS) → Violin API (:8000) → Together AI
 
 Every finished job writes one row to `jobs/stats.sqlite` (job id, language, providers used, tokens, characters, audio seconds, estimated cost, wall time). No video content, IPs, or API keys are stored.
 
-To inspect:
+The container ships with Python's `sqlite3` module but not the `sqlite3` CLI. Use Python heredocs from the host to query:
 
 ```bash
-# Quick aggregates
-docker compose exec violin sqlite3 jobs/stats.sqlite \
-  "SELECT target_language, COUNT(*) AS jobs,
-          printf('\$%.2f', SUM(total_cost_usd)) AS cost
-   FROM jobs GROUP BY 1 ORDER BY jobs DESC;"
+# All rows
+docker compose exec violin python <<'EOF'
+import sqlite3
+c = sqlite3.connect('jobs/stats.sqlite')
+c.row_factory = sqlite3.Row
+for r in c.execute('SELECT * FROM jobs ORDER BY created_at DESC'):
+    print(dict(r))
+EOF
 
-# Last 10 jobs
-docker compose exec violin sqlite3 jobs/stats.sqlite \
-  "SELECT datetime(created_at, 'unixepoch'), target_language, status,
-          printf('%.1fmin', audio_seconds/60.0),
-          printf('\$%.4f', total_cost_usd)
-   FROM jobs ORDER BY created_at DESC LIMIT 10;"
+# Aggregates by target language
+docker compose exec violin python <<'EOF'
+import sqlite3
+c = sqlite3.connect('jobs/stats.sqlite')
+for r in c.execute("""
+    SELECT target_language, COUNT(*) AS jobs,
+           printf('$%.2f', SUM(total_cost_usd)) AS cost
+    FROM jobs GROUP BY 1 ORDER BY jobs DESC
+"""):
+    print(r)
+EOF
 
-# Pull the file to your laptop and explore with a GUI (e.g. DB Browser for SQLite)
+# Recent 10
+docker compose exec violin python <<'EOF'
+import sqlite3, datetime
+c = sqlite3.connect('jobs/stats.sqlite')
+print(f'{"time":<20} {"lang":<10} {"status":<8} {"audio":<10} {"cost":<10} wall')
+print('-' * 70)
+for r in c.execute("""
+    SELECT created_at, target_language, status, audio_seconds,
+           total_cost_usd, duration_seconds
+    FROM jobs ORDER BY created_at DESC LIMIT 10
+"""):
+    t = datetime.datetime.fromtimestamp(r[0]).strftime('%Y-%m-%d %H:%M:%S')
+    print(f'{t:<20} {(r[1] or "-"):<10} {r[2]:<8} {r[3]/60:5.1f} min   ${r[4]:.4f}   {r[5]}s')
+EOF
+
+# Pull the file to your laptop and explore with a GUI
+# (e.g. DB Browser for SQLite, https://sqlitebrowser.org)
 docker compose cp violin:/app/jobs/stats.sqlite ./stats.sqlite
 ```
+
+> Want the `sqlite3` CLI inside the container? Add `sqlite3` to the `apt-get install` line in `Dockerfile`, then rebuild — but the Python heredocs above need no setup at all.
 
 The file is **persistent** — it survives `docker compose down && up`, container rebuilds, and EC2 reboots. It is only deleted by `docker compose down -v` or `docker volume rm jobs_data`.
 
