@@ -49,6 +49,13 @@ def root():
     return FileResponse(str(_STATIC / "index.html"))
 
 
+# Lightweight health probe — accepts both GET and HEAD so external monitors
+# (e.g. UptimeRobot's free tier, which only does HEAD) don't get 405s.
+@app.api_route("/health", methods=["GET", "HEAD"], include_in_schema=False)
+def health():
+    return {"ok": True}
+
+
 @app.get("/app-config", include_in_schema=False)
 def app_config():
     from .config import MAX_DURATION_SECONDS, MAX_FILE_SIZE_MB, URL_UPLOAD

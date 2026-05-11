@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import shutil
 import tempfile
 import threading
@@ -27,6 +28,23 @@ from .models import JobResponse, JobStatus, ProgressEvent
 logger = logging.getLogger(__name__)
 
 _lock = threading.Lock()
+
+
+# Patterns for stripping API keys out of error messages before persisting them
+# to disk. Matches the known prefixes (OpenAI / ElevenLabs) and any sufficiently
+# long hex / alphanumeric run that looks like a Together key.
+_KEY_PATTERNS = [
+    re.compile(r"sk-[A-Za-z0-9_-]{20,}"),       # OpenAI / Anthropic-style
+    re.compile(r"sk_[A-Za-z0-9_-]{20,}"),       # ElevenLabs
+    re.compile(r"\b[A-Fa-f0-9]{48,}\b"),        # Together (long hex token)
+]
+
+
+def _redact(text: str) -> str:
+    """Strip anything that looks like an API key from a string."""
+    for pat in _KEY_PATTERNS:
+        text = pat.sub("***", text)
+    return text
 
 
 def _job_dir(job_id: str) -> Path:
@@ -62,13 +80,13 @@ def update_status(job_id: str, status: JobStatus, error: str | None = None) -> N
     meta = _read_meta(job_id)
     meta["status"] = status
     if error is not None:
-        meta["error"] = error
+        meta["error"] = _redact(error)
     _atomic_write(_meta_path(job_id), json.dumps(meta))
 
 
 def append_progress(job_id: str, step: int, total: int, message: str) -> None:
     """Append a progress event to the job's progress log."""
-    event = json.dumps({"step": step, "total": total, "message": message})
+    event = json.dumps({"step": step, "total": total, "message": _redact(message)})
     with open(_progress_path(job_id), "a", encoding="utf-8") as f:
         f.write(event + "\n")
 
