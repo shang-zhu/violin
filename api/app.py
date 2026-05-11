@@ -67,6 +67,14 @@ def app_config():
 
 
 @app.on_event("startup")
+async def _init_stats():
+    """Create the stats table if it doesn't exist. Idempotent — existing rows
+    are preserved across restarts."""
+    from . import stats as _stats
+    _stats.init_db()
+
+
+@app.on_event("startup")
 async def _start_cleanup_loop():
     from .config import JOB_TTL_HOURS
     if JOB_TTL_HOURS <= 0:

@@ -13,14 +13,22 @@ from dotenv import load_dotenv
 from together import Together
 
 from pipeline import config as pipeline_config
+from pipeline.costs import CostTracker
 from pipeline.extractor import extract_audio, get_video_duration
 from pipeline.languages import language_code
-from pipeline.llm_client import make_transcription_client, make_translation_client
+from pipeline.llm_client import (
+    get_transcription_provider,
+    get_translation_provider,
+    make_transcription_client,
+    make_translation_client,
+)
 from pipeline.merger import build_aligned_video, build_gap_chunks, generate_srt, prepare_merge
 from pipeline.styles import resolve as resolve_style
 from pipeline.transcriber import merge_continuous_segments, split_into_sentences, transcribe
 from pipeline.translator import translate_segments
-from pipeline.tts import native_voices_for, synthesize_segments
+from pipeline.tts import get_tts_provider, native_voices_for, synthesize_segments
+
+from . import stats as _stats
 
 from .config import MAX_WORKERS
 from .models import JobStatus
@@ -67,6 +75,8 @@ def _run_job(
     openai_key_override: str | None = None,
     elevenlabs_key_override: str | None = None,
 ) -> None:
+    import time as _time
+
     update_status(job_id, JobStatus.running)
 
     api_key = together_key_override or os.environ.get("TOGETHER_API_KEY")
@@ -80,6 +90,13 @@ def _run_job(
     subtitles = params["subtitles"]
     voiceover = params.get("voiceover", True)
     style = resolve_style(params.get("style", "standard"))
+
+    tracker = CostTracker()
+    started_at = int(_time.time())
+    segments_count = 0
+    total_duration = 0.0
+    error_msg: str | None = None
+    final_status = JobStatus.done
 
     try:
         src = input_path(job_id)
@@ -105,6 +122,7 @@ def _run_job(
             _progress(job_id, 1, "Extracting audio…")
             audio_path = extract_audio(str(src), str(tmp_dir / "audio.wav"))
             total_duration = get_video_duration(str(src))
+            tracker.audio_minutes = total_duration / 60.0
 
             _check_cancelled(job_id)
             _progress(job_id, 2, f"Transcribing with Whisper Large v3… (video duration: {total_duration:.0f}s)")
@@ -119,11 +137,13 @@ def _run_job(
                        f"(style: {style.name})…")
             translated = translate_segments(
                 segments, target_language, translation_client, source_language,
+                tracker=tracker,
                 style_directives=style.translation_directives,
                 style_temperature=style.temperature,
             )
             translated = merge_continuous_segments(translated, max_duration=float("inf"))
             translated = split_into_sentences(translated)
+            segments_count = len(translated)
 
             _check_cancelled(job_id)
             effective_voice = voice or native_voices_for(lang_code)[0]
@@ -155,6 +175,7 @@ def _run_job(
             tts_paths = synthesize_segments(
                 translated, effective_voice, str(tts_dir), client,
                 language=lang_code,
+                tracker=tracker,
                 speed=style.tts_speed, emotion=style.tts_emotion,
                 elevenlabs_api_key=elevenlabs_key_override,
             )
@@ -193,9 +214,46 @@ def _run_job(
         update_status(job_id, JobStatus.done)
 
     except _Cancelled:
-        pass
+        final_status = JobStatus.cancelled
     except Exception as exc:
-        update_status(job_id, JobStatus.failed, str(exc))
+        error_msg = str(exc)
+        final_status = JobStatus.failed
+        update_status(job_id, JobStatus.failed, error_msg)
+
+    # Persist stats — never crashes the pipeline. Skip cancelled jobs.
+    if final_status != JobStatus.cancelled:
+        try:
+            cfg = pipeline_config.get()
+            cb = tracker.cost_breakdown()
+            finished_at = int(_time.time())
+            _stats.record_job({
+                "id": job_id,
+                "created_at": started_at,
+                "finished_at": finished_at,
+                "status": str(final_status),
+                "target_language": target_language,
+                "source_language": source_language,
+                "style": style.name,
+                "voice": voice or "",
+                "voiceover": 1 if voiceover else 0,
+                "transcription_provider": get_transcription_provider(cfg),
+                "translation_provider": get_translation_provider(cfg),
+                "tts_provider": get_tts_provider(),
+                "segments_count": segments_count,
+                "audio_seconds": total_duration,
+                "tts_characters": tracker.tts_characters,
+                "llm_input_tokens": tracker.llm_input_tokens,
+                "llm_output_tokens": tracker.llm_output_tokens,
+                "whisper_cost_usd": cb["whisper"]["cost"],
+                "translation_cost_usd": cb["translation"]["cost"],
+                "tts_cost_usd": cb["tts"]["cost"],
+                "total_cost_usd": cb["total"],
+                "duration_seconds": finished_at - started_at,
+                "error": error_msg,
+            })
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception("Failed to record stats")
 
 
 def _download_url(job_id: str, url: str) -> Path:
