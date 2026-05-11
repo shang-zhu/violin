@@ -1,6 +1,6 @@
 # 🎻 Violin
 
-> 🎙️ Translate educational videos from one language to another using [Together AI](https://www.together.ai). Replaces the audio track with a dubbed voice in the target language and generates a subtitle file — available as a CLI or a REST API.
+> Translate educational videos from one language to another using [Together AI](https://www.together.ai). Replaces the audio track with a dubbed voice in the target language and generates a subtitle file — available as a CLI or a REST API.
 
 ```bash
 uv run main.py assets/demo_en.mp4 assets/emo_zh.mp4 --language Chinese
@@ -14,25 +14,25 @@ uv run main.py assets/demo_en.mp4 assets/emo_zh.mp4 --language Chinese
 ## 🚀 Pipeline
 
 ```
-🎬 Video
+Video
   │
-  ├─ 🎞️  ffmpeg ──────────────────► Extract audio (16kHz WAV)
+  ├─ ffmpeg ──────────────────► Extract audio (16kHz WAV)
   │
-  ├─ 📝 Together AI Whisper v3 ──► Transcribe → timestamped segments
+  ├─ Together AI Whisper v3 ──► Transcribe → timestamped segments
   │
-  ├─ 🌐 Together AI Qwen3.5-397B ► Translate segments → target language
+  ├─ Together AI Qwen3.5-397B ► Translate segments → target language
   │
-  ├─ 🔊 Cartesia Sonic 3 ────────► Synthesize dubbed audio (native-language voices)
+  ├─ Cartesia Sonic 3 ────────► Synthesize dubbed audio (native-language voices)
   │
-  └─ 🎬 ffmpeg ──────────────────► Merge dubbed audio + original video → output
-                                    + 💬 SRT subtitle file
+  └─ ffmpeg ──────────────────► Merge dubbed audio + original video → output
+                                 + SRT subtitle file
 ```
 
 | Step | Model | Provider |
 |------|-------|----------|
-| 📝 Transcription | `openai/whisper-large-v3` | Together AI |
-| 🌐 Translation | `Qwen/Qwen3.5-397B-A17B` | Together AI |
-| 🔊 TTS | `cartesia/sonic-3` | Together AI |
+| Transcription | `openai/whisper-large-v3` | Together AI |
+| Translation | `Qwen/Qwen3.5-397B-A17B` | Together AI |
+| TTS | `cartesia/sonic-3` | Together AI |
 
 ---
 
@@ -72,27 +72,27 @@ cp .env.example .env
 ## 💻 CLI Usage
 
 ```bash
-# Basic — translate to Spanish 🇪🇸
+# Basic — translate to Spanish
 uv run main.py lecture.mp4 lecture_es.mp4 --language Spanish
 
-# Custom voice 🎙️
+# Custom voice
 uv run main.py lecture.mp4 lecture_fr.mp4 --language French --voice "french narrator man"
 
-# No subtitles 🚫💬
+# No subtitles
 uv run main.py lecture.mp4 lecture_ja.mp4 --language Japanese --no-subtitles
 
-# Hint the source language for better translation 🎯
+# Hint the source language for better translation
 uv run main.py lecture.mp4 lecture_ko.mp4 --language Korean --source-language English
 ```
 
-### 🎛️ CLI Options
+### CLI Options
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--language`, `-l` | *(required)* | 🌐 Target language name (e.g. `Spanish`, `Japanese`) |
-| `--voice`, `-v` | auto | 🗣️ Cartesia Sonic 3 voice. Defaults to the primary native voice for the target language |
-| `--source-language` | `auto-detect` | 🔍 Source language hint for translation |
-| `--no-subtitles` | off | 🚫 Skip SRT generation |
+| `--language`, `-l` | *(required)* | Target language name (e.g. `Spanish`, `Japanese`) |
+| `--voice`, `-v` | auto | Cartesia Sonic 3 voice. Defaults to the primary native voice for the target language |
+| `--source-language` | `auto-detect` | Source language hint for translation |
+| `--no-subtitles` | off | Skip SRT generation |
 
 ---
 
@@ -103,43 +103,43 @@ Start the server:
 ```bash
 uv run run_api.py
 # → http://127.0.0.1:8000
-# → http://127.0.0.1:8000/docs  (📖 interactive API docs)
+# → http://127.0.0.1:8000/docs  (interactive API docs)
 ```
 
 Options: `--host`, `--port`, `--reload` (dev mode).
 
-### 🔌 Endpoints
+### Endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/jobs` | 📤 Upload a video and start a translation job |
-| `GET` | `/jobs/{id}` | 📊 Poll job status and progress |
-| `GET` | `/jobs/{id}/video` | 🎬 Download the dubbed video (when done) |
-| `GET` | `/jobs/{id}/srt` | 💬 Download the SRT subtitle file (when done) |
-| `GET` | `/jobs/{id}/segments` | 📜 Fetch aligned subtitle segments for player/chat context |
-| `POST` | `/jobs/{id}/chat` | 💭 Ask a question about the current video moment using subtitle + visual context |
-| `DELETE` | `/jobs/{id}` | 🗑️ Delete a job and its files |
-| `GET` | `/languages` | 🌍 List all supported language names |
-| `GET` | `/voices` | 🎙️ List all native voices by language code |
-| `GET` | `/voices/{language}` | 🗣️ Voices for a specific language |
+| `POST` | `/jobs` | Upload a video and start a translation job |
+| `GET` | `/jobs/{id}` | Poll job status and progress |
+| `GET` | `/jobs/{id}/video` | Download the dubbed video (when done) |
+| `GET` | `/jobs/{id}/srt` | Download the SRT subtitle file (when done) |
+| `GET` | `/jobs/{id}/segments` | Fetch aligned subtitle segments for player/chat context |
+| `POST` | `/jobs/{id}/chat` | Ask a question about the current video moment using subtitle + visual context |
+| `DELETE` | `/jobs/{id}` | Delete a job and its files |
+| `GET` | `/languages` | List all supported language names |
+| `GET` | `/voices` | List all native voices by language code |
+| `GET` | `/voices/{language}` | Voices for a specific language |
 
-### 🧪 Example
+### Example
 
 ```bash
-# Submit a job 📤
+# Submit a job
 JOB=$(curl -s -X POST http://localhost:8000/jobs \
   -F "file=@lecture.mp4" \
   -F "language=Spanish" | jq -r .id)
 
-# Poll until done ⏳
+# Poll until done
 curl -s http://localhost:8000/jobs/$JOB | jq '{status, progress}'
 
-# Download results 📥
+# Download results
 curl -OJ http://localhost:8000/jobs/$JOB/video
 curl -OJ http://localhost:8000/jobs/$JOB/srt
 ```
 
-> 💾 Job data is stored under `jobs/{id}/` and persists across server restarts. Use `DELETE /jobs/{id}` to clean up.
+> Job data is stored under `jobs/{id}/` and persists across server restarts. Use `DELETE /jobs/{id}` to clean up.
 
 ---
 
@@ -149,22 +149,22 @@ All 42 languages supported by Cartesia Sonic 3, with native-matched voices where
 
 | Language | Native Voice (male / female) |
 |----------|------------------------------|
-| 🇨🇳 Chinese | chinese commercial man / chinese female conversational |
-| 🇯🇵 Japanese | japanese male conversational / japanese woman conversational |
-| 🇰🇷 Korean | korean narrator man / korean calm woman |
-| 🇪🇸 Spanish | spanish narrator man / spanish narrator lady |
-| 🇫🇷 French | french narrator man / french narrator lady |
-| 🇩🇪 German | german reporter man / german conversational woman |
-| 🇮🇹 Italian | italian narrator man / italian narrator woman |
-| 🇳🇱 Dutch | dutch confident man / dutch man |
-| 🇷🇺 Russian | russian narrator man 1 / russian narrator woman |
-| 🇧🇷 Portuguese | friendly brazilian man / pleasant brazilian lady |
-| 🇮🇳 Hindi | hindi narrator man / hindi narrator woman |
-| 🇹🇷 Turkish | turkish narrator man / turkish calm man |
-| 🇵🇱 Polish | polish confident man / polish narrator woman |
-| 🇸🇪 Swedish | swedish narrator man / swedish calm lady |
-| 🇸🇦 Arabic | middle eastern woman |
-| 🇬🇧 English + 27 more | tutorial man / helpful woman |
+| Chinese | chinese commercial man / chinese female conversational |
+| Japanese | japanese male conversational / japanese woman conversational |
+| Korean | korean narrator man / korean calm woman |
+| Spanish | spanish narrator man / spanish narrator lady |
+| French | french narrator man / french narrator lady |
+| German | german reporter man / german conversational woman |
+| Italian | italian narrator man / italian narrator woman |
+| Dutch | dutch confident man / dutch man |
+| Russian | russian narrator man 1 / russian narrator woman |
+| Portuguese | friendly brazilian man / pleasant brazilian lady |
+| Hindi | hindi narrator man / hindi narrator woman |
+| Turkish | turkish narrator man / turkish calm man |
+| Polish | polish confident man / polish narrator woman |
+| Swedish | swedish narrator man / swedish calm lady |
+| Arabic | middle eastern woman |
+| English + 27 more | tutorial man / helpful woman |
 
 ---
 
@@ -172,10 +172,10 @@ All 42 languages supported by Cartesia Sonic 3, with native-matched voices where
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `TOGETHER_API_KEY` | ✅ Yes | 🔑 Together AI API key |
-| `TOGETHER_TTS_BASE_URL` | ❌ No | 🔗 Custom base URL for Together AI dedicated endpoints |
-| `JOBS_DIR` | ❌ No | 📁 Directory for API job storage (default: `./jobs`) |
-| `MAX_WORKERS` | ❌ No | 🧵 Max concurrent API translation jobs (default: `2`) |
+| `TOGETHER_API_KEY` | Yes | Together AI API key |
+| `TOGETHER_TTS_BASE_URL` | No | Custom base URL for Together AI dedicated endpoints |
+| `JOBS_DIR` | No | Directory for API job storage (default: `./jobs`) |
+| `MAX_WORKERS` | No | Max concurrent API translation jobs (default: `2`) |
 
 ---
 
@@ -183,26 +183,26 @@ All 42 languages supported by Cartesia Sonic 3, with native-matched voices where
 
 ```
 Violin/
-├── 🎯 main.py                  # CLI entry point
-├── 🌐 run_api.py               # API server entry point
-├── 📦 pipeline/
-│   ├── extractor.py         # 🎞️  Audio extraction (ffmpeg)
-│   ├── transcriber.py       # 📝 Whisper transcription + hallucination filtering
-│   ├── translator.py        # 🌐 Qwen3.5-397B translation (batched)
-│   ├── tts.py               # 🔊 Cartesia Sonic 3 TTS + native voice selection
-│   ├── merger.py            # 🧩 Audio assembly + SRT generation + video merge
-│   ├── languages.py         # 🗺️  BCP-47 language code mapping
-│   └── ffmpeg_utils.py      # 🛠️  Bundled ffmpeg helpers (no system ffmpeg needed)
-├── 🛰️  api/
-│   ├── app.py               # ⚡ FastAPI application
-│   ├── config.py            # ⚙️  Configuration (JOBS_DIR, MAX_WORKERS)
-│   ├── models.py            # 📐 Pydantic schemas
-│   ├── storage.py           # 💾 File-based job storage
-│   ├── worker.py            # 🧵 ThreadPoolExecutor job runner
+├── main.py                  # CLI entry point
+├── run_api.py               # API server entry point
+├── pipeline/
+│   ├── extractor.py         # Audio extraction (ffmpeg)
+│   ├── transcriber.py       # Whisper transcription + hallucination filtering
+│   ├── translator.py        # Qwen3.5-397B translation (batched)
+│   ├── tts.py               # Cartesia Sonic 3 TTS + native voice selection
+│   ├── merger.py            # Audio assembly + SRT generation + video merge
+│   ├── languages.py         # BCP-47 language code mapping
+│   └── ffmpeg_utils.py      # Bundled ffmpeg helpers (no system ffmpeg needed)
+├── api/
+│   ├── app.py               # FastAPI application
+│   ├── config.py            # Configuration (JOBS_DIR, MAX_WORKERS)
+│   ├── models.py            # Pydantic schemas
+│   ├── storage.py           # File-based job storage
+│   ├── worker.py            # ThreadPoolExecutor job runner
 │   └── routes/
-│       ├── jobs.py          # 🔄 Job lifecycle endpoints
-│       ├── files.py         # 📥 Video/SRT download endpoints
-│       └── catalog.py       # 📚 Language and voice catalog endpoints
+│       ├── jobs.py          # Job lifecycle endpoints
+│       ├── files.py         # Video/SRT download endpoints
+│       └── catalog.py       # Language and voice catalog endpoints
 ├── .env.example
 └── pyproject.toml
 ```
@@ -211,9 +211,9 @@ Violin/
 
 ## 📝 Notes
 
-- 🎞️ **No system ffmpeg required** — bundled via `imageio-ffmpeg`
-- 📏 **Long videos** — translation is batched in chunks of 60 segments; no hard length limit
-- 💾 **API job storage** — jobs persist in `jobs/` across server restarts; clean up with `DELETE /jobs/{id}` or by removing the directory
+- **No system ffmpeg required** — bundled via `imageio-ffmpeg`
+- **Long videos** — translation is batched in chunks of 60 segments; no hard length limit
+- **API job storage** — jobs persist in `jobs/` across server restarts; clean up with `DELETE /jobs/{id}` or by removing the directory
 
 ---
 
@@ -222,10 +222,10 @@ Violin/
 The instructions above get you a working dev checkout (`uv run main.py …`). To install `violin` and `violin-api` as system-wide commands you can run from anywhere:
 
 ```bash
-# From inside the repo 🏠
+# From inside the repo
 uv tool install .
 
-# Or, while developing — links to your source so edits take effect immediately ✏️
+# Or, while developing — links to your source so edits take effect immediately
 uv tool install --editable .
 ```
 
@@ -236,19 +236,19 @@ violin lecture.mp4 lecture_zh.mp4 --language Chinese
 violin-api --port 8000
 ```
 
-🔄 Update after pulling new changes:
+Update after pulling new changes:
 
 ```bash
 uv tool install . --reinstall
 ```
 
-🗑️ Uninstall:
+Uninstall:
 
 ```bash
 uv tool uninstall violin
 ```
 
-> 📦 The bundled `config/default.yaml` and `config/prod.yaml` are packaged into the install, so `violin` works correctly from any directory.
+> The bundled `config/default.yaml` and `config/prod.yaml` are packaged into the install, so `violin` works correctly from any directory.
 
 ---
 
@@ -256,13 +256,13 @@ uv tool uninstall violin
 
 This repo ships a [Claude Code skill](https://code.claude.com/docs/en/skills) at `.claude/skills/video-translator/`. After cloning the repo and configuring `.env`, run `claude` in the project directory and describe the task in natural language:
 
-> 💬 Translate examples/lecture.mp4 to Chinese with the academic style
+> Translate examples/lecture.mp4 to Chinese with the academic style
 
 Claude loads the skill automatically, picks the right style, runs pre-flight checks (input file exists, `TOGETHER_API_KEY` is set), invokes `violin` (or `uv run main.py` if not yet installed globally), and reports the cost summary at the end.
 
-🎯 The skill is intentionally scoped to the **default Together + Cartesia stack** only — it doesn't try to switch to OpenAI / ElevenLabs. If you want premium models or custom configs, clone the repo and use the CLI directly with `--config config/prod.yaml`.
+The skill is intentionally scoped to the **default Together + Cartesia stack** only — it doesn't try to switch to OpenAI / ElevenLabs. If you want premium models or custom configs, clone the repo and use the CLI directly with `--config config/prod.yaml`.
 
-### 🌐 Global skill (any directory)
+### Global skill (any directory)
 
 If you've installed `violin` globally (see above), you can copy the skill to your user-level skills directory so it loads in **any** Claude Code session, not just inside this repo:
 
@@ -272,35 +272,35 @@ cp -r .claude/skills/video-translator ~/.claude/skills/
 
 After that, `claude` running anywhere will recognize requests like "dub this video" or "generate Chinese subtitles for X.mp4" and call `violin` with the right flags.
 
-> 🔑 **API keys outside the repo.** The project-local `.env` is only auto-loaded when you run `violin` from inside the repo. For the global skill (which only uses the default Together + Cartesia stack), export the one required key in your shell rc file instead:
+> **API keys outside the repo.** The project-local `.env` is only auto-loaded when you run `violin` from inside the repo. For the global skill (which only uses the default Together + Cartesia stack), export the one required key in your shell rc file instead:
 
 ```bash
 # ~/.zshrc or ~/.bashrc
 export TOGETHER_API_KEY="..."
 ```
 
-♻️ Reload (`source ~/.zshrc`) and `violin` will pick the key up from anywhere.
+Reload (`source ~/.zshrc`) and `violin` will pick the key up from anywhere.
 
 ---
 
 ## ✅ TODO
 
-- [ ] 🧪 Test the Claude Code skill end-to-end. Checklist:
-  - 🏠 **Project-level**: in the repo with `.env` populated, run `claude`, say "translate examples/<file>.mp4 to Chinese". Verify the skill auto-loads, pre-flight finds `TOGETHER_API_KEY`, and `violin` (or `uv run main.py`) is invoked with sensible flags.
-  - 🌐 **User-level**: `cp -r .claude/skills/video-translator ~/.claude/skills/`, then `cd /tmp && claude`. With `TOGETHER_API_KEY` exported in `~/.zshrc`, verify the skill triggers and runs.
-  - ⛔ **Negative case**: unset `TOGETHER_API_KEY` and confirm the skill stops with a clear "set the key in `.env` / `~/.zshrc`" message instead of running a doomed command.
-  - 🎨 **Style routing**: try requests like "translate this for kids", "translate this in news anchor style" and verify Claude picks the right `--style`.
-  - 💎 **Premium pushback**: ask for "best quality with OpenAI / ElevenLabs" — verify the skill refuses and points the user back to the repo with `--config config/prod.yaml`.
-- [ ] 📦 Publish to PyPI so `uv tool install violin` works without `git clone`. Checklist:
-  - 🔍 Check name availability at https://pypi.org/project/violin/ (rename if taken)
-  - 🛠️ `uv build` → confirm `config/`, `prompts/`, `main.py`, `run_api.py` are in `dist/*.whl`
-  - 🧪 Smoke-test the wheel in a fresh venv from outside the repo
-  - 🔐 Register PyPI account + API token (try TestPyPI first via `--publish-url https://test.pypi.org/legacy/`)
-  - 🚀 `uv publish`
-  - ✏️ Update the install section above to use `uv tool install violin` (drop the `.`)
+- [ ] Test the Claude Code skill end-to-end. Checklist:
+  - **Project-level**: in the repo with `.env` populated, run `claude`, say "translate examples/<file>.mp4 to Chinese". Verify the skill auto-loads, pre-flight finds `TOGETHER_API_KEY`, and `violin` (or `uv run main.py`) is invoked with sensible flags.
+  - **User-level**: `cp -r .claude/skills/video-translator ~/.claude/skills/`, then `cd /tmp && claude`. With `TOGETHER_API_KEY` exported in `~/.zshrc`, verify the skill triggers and runs.
+  - **Negative case**: unset `TOGETHER_API_KEY` and confirm the skill stops with a clear "set the key in `.env` / `~/.zshrc`" message instead of running a doomed command.
+  - **Style routing**: try requests like "translate this for kids", "translate this in news anchor style" and verify Claude picks the right `--style`.
+  - **Premium pushback**: ask for "best quality with OpenAI / ElevenLabs" — verify the skill refuses and points the user back to the repo with `--config config/prod.yaml`.
+- [ ] Publish to PyPI so `uv tool install violin` works without `git clone`. Checklist:
+  - Check name availability at https://pypi.org/project/violin/ (rename if taken)
+  - `uv build` → confirm `config/`, `prompts/`, `main.py`, `run_api.py` are in `dist/*.whl`
+  - Smoke-test the wheel in a fresh venv from outside the repo
+  - Register PyPI account + API token (try TestPyPI first via `--publish-url https://test.pypi.org/legacy/`)
+  - `uv publish`
+  - Update the install section above to use `uv tool install violin` (drop the `.`)
 
 ---
 
 ## 📜 License
 
-MIT 🆓
+MIT
