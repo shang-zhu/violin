@@ -202,6 +202,7 @@ def _download_url(job_id: str, url: str) -> Path:
     """Download a video from a URL using yt-dlp. Returns the path to the downloaded file."""
     import yt_dlp
 
+    from .config import MAX_DURATION_SECONDS, MAX_FILE_SIZE_MB
     from .storage import _job_dir
 
     job_dir = _job_dir(job_id)
@@ -214,14 +215,16 @@ def _download_url(job_id: str, url: str) -> Path:
         "quiet": True,
         "no_warnings": True,
         "noplaylist": True,
-        "max_filesize": 500 * 1024 * 1024,  # 500 MB limit
     }
+    if MAX_FILE_SIZE_MB > 0:
+        ydl_opts["max_filesize"] = MAX_FILE_SIZE_MB * 1024 * 1024
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
         duration = info.get("duration", 0)
-        if duration and duration > 7200:
-            raise ValueError(f"Video too long ({duration // 60} min). Max 2 hours.")
+        if MAX_DURATION_SECONDS > 0 and duration and duration > MAX_DURATION_SECONDS:
+            limit_min = MAX_DURATION_SECONDS // 60
+            raise ValueError(f"Video too long ({duration // 60} min). Max {limit_min} min.")
 
     for p in job_dir.glob("input.*"):
         return p

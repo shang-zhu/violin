@@ -373,6 +373,32 @@
           </template>
         </div>
 
+        <!-- File-validation error -->
+        <template x-if="inputMode === 'file' && fileError">
+          <div class="-mt-4 mb-6 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700 flex items-start gap-2">
+            <svg class="w-4 h-4 flex-shrink-0 mt-px text-red-500" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zM12 15.75h.008v.008H12v-.008z" />
+            </svg>
+            <div class="flex-1 min-w-0">
+              <p x-text="fileError"></p>
+              <p class="mt-1 text-red-600/80">
+                Need to translate a longer video?
+                <a href="https://github.com/shang-zhu/Violin" target="_blank" rel="noopener" class="underline underline-offset-2 hover:text-red-800">Run Violin locally</a>
+                — no length or size limits.
+              </p>
+            </div>
+          </div>
+        </template>
+
+        <!-- Hint about limits (shown before a file is picked) -->
+        <p
+          x-show="inputMode === 'file' && !file && !fileError"
+          class="-mt-4 mb-6 text-[11px] text-ink-400 text-center"
+        >
+          Up to <span x-text="Math.round(maxDurationSeconds / 60)"></span> min
+          / <span x-text="maxFileSizeMb"></span> MB
+        </p>
+
         <!-- URL input -->
         <div x-show="inputMode === 'url'" class="mb-6">
           <div class="border-2 border-dashed border-cream-300 rounded-xl p-6 transition-all duration-200" :class="videoUrl.trim() ? 'border-gold-300 bg-gold-50/30' : ''">
@@ -781,6 +807,14 @@
         <p class="text-base font-semibold text-ink-800 mb-2" x-text="needsKey && !userApiKey.trim() ? 'Free trial used' : 'Something went wrong'"></p>
         <p class="text-sm text-ink-500 mb-4 font-mono bg-cream-100 rounded-lg px-4 py-3 text-left break-words" x-text="errorMessage || 'Unknown error'"></p>
 
+        <template x-if="/too (long|large)/i.test(errorMessage)">
+          <p class="text-xs text-ink-500 mb-5 px-1">
+            Need to translate longer or larger videos?
+            <a href="https://github.com/shang-zhu/Violin" target="_blank" rel="noopener" class="underline underline-offset-2 text-accent-500 hover:text-accent-600">Run Violin locally</a>
+            — no limits.
+          </p>
+        </template>
+
         <template x-if="needsKey">
           <div class="mb-5 text-left w-full max-w-sm mx-auto">
             <label class="block text-xs font-semibold text-ink-400 uppercase tracking-[0.14em] mb-2">Your Together API Key</label>
@@ -948,6 +982,9 @@ function app() {
     inputMode: 'file',
     videoUrl: '',
     urlUploadEnabled: false,
+    maxDurationSeconds: 1800,
+    maxFileSizeMb: 500,
+    fileError: '',
 
     // demo gallery
     demoOpen: false,
@@ -1067,6 +1104,8 @@ function app() {
         const cfg = await fetch('/app-config');
         const data = await cfg.json();
         this.urlUploadEnabled = !!data.url_upload;
+        if (data.max_duration_seconds) this.maxDurationSeconds = data.max_duration_seconds;
+        if (data.max_file_size_mb) this.maxFileSizeMb = data.max_file_size_mb;
       } catch (_) {}
       await this._checkTrial();
       this._resumeJob();
@@ -1137,16 +1176,57 @@ function app() {
 
     onDrop(e) {
       const f = e.dataTransfer.files[0];
-      if (f) this.file = f;
       this.dragover = false;
+      if (f) this._acceptFile(f);
     },
 
     onFileChange(e) {
-      this.file = e.target.files[0] || null;
+      const f = e.target.files[0];
+      if (f) this._acceptFile(f);
+    },
+
+    _acceptFile(f) {
+      this.fileError = '';
+      // Size cap — instant check.
+      if (this.maxFileSizeMb > 0 && f.size > this.maxFileSizeMb * 1024 * 1024) {
+        const sizeMb = (f.size / (1024 * 1024)).toFixed(0);
+        this.fileError = `File too large (${sizeMb} MB). Max ${this.maxFileSizeMb} MB.`;
+        this.file = null;
+        if (this.$refs.fileInput) this.$refs.fileInput.value = '';
+        return;
+      }
+      // Duration cap — needs a brief metadata load.
+      if (this.maxDurationSeconds > 0) {
+        const url = URL.createObjectURL(f);
+        const probe = document.createElement('video');
+        probe.preload = 'metadata';
+        probe.muted = true;
+        probe.onloadedmetadata = () => {
+          URL.revokeObjectURL(url);
+          if (probe.duration && probe.duration > this.maxDurationSeconds) {
+            const mins = (probe.duration / 60).toFixed(1);
+            const limitMin = Math.round(this.maxDurationSeconds / 60);
+            this.fileError = `Video too long (${mins} min). Max ${limitMin} min.`;
+            this.file = null;
+            if (this.$refs.fileInput) this.$refs.fileInput.value = '';
+          } else {
+            this.file = f;
+          }
+        };
+        probe.onerror = () => {
+          URL.revokeObjectURL(url);
+          // Couldn't read duration — accept the file; the server will re-check.
+          this.file = f;
+        };
+        probe.src = url;
+      } else {
+        this.file = f;
+      }
     },
 
     clearFile() {
       this.file = null;
+      this.fileError = '';
       this.$refs.fileInput.value = '';
     },
 
@@ -1419,7 +1499,7 @@ function app() {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const blob = await res.blob();
         const filename = item.origUrl.split('/').pop() || 'sample.mp4';
-        this.file = new File([blob], filename, { type: blob.type || 'video/mp4' });
+        this._acceptFile(new File([blob], filename, { type: blob.type || 'video/mp4' }));
         this.inputMode = 'file';
         this.videoUrl = '';
         if (this.languages[item.dubLang]) {

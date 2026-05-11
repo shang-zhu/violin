@@ -16,3 +16,5 @@ api:
   max_workers: 1             # serialize jobs to avoid the multiplier blowing up RAM
   free_trial_jobs: 1         # jobs allowed per IP without a user-provided API key (0 = unlimited)
   url_upload: false          # don't allow users to paste video URLs (yt-dlp); set true to enable
+  max_duration_seconds: 1800 # reject videos longer than 30 min — keeps API spend & ffmpeg load bounded
+  max_file_size_mb: 500      # reject uploads larger than 500 MB — covers ~30 min 720p H.264 with headroom
