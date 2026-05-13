@@ -262,6 +262,12 @@ PRs welcome. Got questions or hit a bug? Email **<heyviolinai@gmail.com>** or op
 
 ---
 
+## ⚠️ Disclaimer
+
+This is a personal open-source project, not a Together AI product. Users are responsible for ensuring they have the right to download and translate any content they process. Designed for Creative Commons, public domain, your own recordings, and other content you have permission to use.
+
+---
+
 ## 📜 License
 
 [MIT](LICENSE) — use it freely, including commercially.

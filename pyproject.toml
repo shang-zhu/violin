@@ -1,6 +1,6 @@
 [project]
 name = "violin"
-version = "0.1.0a3"
+version = "0.1.0a4"
 description = "Open-source video dubbing — translate any video into 33 languages with native-sounding voice-over and synced subtitles."
 readme = "README.md"
 license = { text = "MIT" }
