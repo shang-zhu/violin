@@ -181,7 +181,6 @@
             <img
               :src="item.poster"
               :alt="item.title"
-              @error="demosAvailable = false"
               class="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity"
               loading="lazy"
             />
@@ -1006,7 +1005,7 @@ function app() {
     demoActiveIdx: 0,
     demoVersion: 'dub',          // 'orig' | 'dub'
     loadingDemoIdx: -1,
-    demosAvailable: true,        // flipped to false on the first poster 404 (e.g. pip-installed without demo clips)
+    demosAvailable: false,       // probed in init() — only flipped on if /static/demo/ assets exist (pip installs skip them)
     demoItems: [
       {
         title: 'GPT-OSS launch',
@@ -1125,6 +1124,14 @@ function app() {
         this.freeTrialJobs = data.free_trial_jobs ?? 0;
         this.jobTtlHours = data.job_ttl_hours ?? 0;
       } catch (_) {}
+      try {
+        // Probe one demo asset to decide whether to render the gallery.
+        // pip-installed users don't have api/static/demo/* (excluded from wheel).
+        const probe = await fetch(this.demoItems[0].poster, { method: 'HEAD' });
+        this.demosAvailable = probe.ok;
+      } catch (_) {
+        this.demosAvailable = false;
+      }
       await this._checkTrial();
       this._resumeJob();
     },

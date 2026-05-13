@@ -30,7 +30,7 @@ The live demo runs at **<https://violin-ai.com>** — drop a short clip in, get 
 
 ### Run locally
 
-Requires **Python 3.13+** and **ffmpeg** on PATH.
+Requires **Python 3.10+** and **ffmpeg** on PATH.
 
 ```bash
 uv tool install --pre violin     # --pre needed while v0.1 is in alpha

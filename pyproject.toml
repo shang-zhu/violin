@@ -1,10 +1,10 @@
 [project]
 name = "violin"
-version = "0.1.0a4"
+version = "0.1.0a5"
 description = "Open-source video dubbing — translate any video into 33 languages with native-sounding voice-over and synced subtitles."
 readme = "README.md"
 license = { text = "MIT" }
-requires-python = ">=3.13"
+requires-python = ">=3.10"
 authors = [
     { name = "Shang Zhu" },
     { name = "Qinghong Lin" },
@@ -16,6 +16,9 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Multimedia :: Sound/Audio :: Speech",
     "Topic :: Multimedia :: Video",
