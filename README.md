@@ -44,7 +44,7 @@ Three ways to use it:
 **1. CLI** — translate one file:
 
 ```bash
-uv run main.py lecture.mp4 lecture_zh.mp4 --language Chinese
+uv run main.py assets/demo_en.mp4.mp4 assets/demo_en_zh.mp4 --language Chinese
 ```
 
 **2. Web app** — full REST API + browser UI:

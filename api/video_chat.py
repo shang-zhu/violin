@@ -16,7 +16,7 @@ from pipeline.ffmpeg_utils import FFMPEG_EXE, get_duration_video
 from pipeline.llm_client import get_chat_model, make_chat_client
 import prompts as _prompts
 
-load_dotenv()
+load_dotenv(override=True)
 
 
 def _chat_cfg() -> dict:

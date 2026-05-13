@@ -1,34 +1,20 @@
-"""Background worker that runs the translation pipeline in a thread pool."""
+"""Background worker that runs the dubbing pipeline in a thread pool."""
 
 from __future__ import annotations
 
-import os
-import shutil
-import tempfile
-import threading
+import time as _time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from dotenv import load_dotenv
 
 from pipeline import config as pipeline_config
-from pipeline.costs import CostTracker
-from pipeline.extractor import extract_audio, get_video_duration
-from pipeline.languages import language_code
-from pipeline.llm_client import (
-    get_transcription_provider,
-    get_translation_provider,
-    make_transcription_client,
-    make_translation_client,
-)
-from pipeline.merger import build_aligned_video, build_gap_chunks, generate_srt, prepare_merge
+from pipeline.llm_client import get_transcription_provider, get_translation_provider
+from pipeline.orchestrator import Cancelled, DubOptions, dub_video
 from pipeline.styles import resolve as resolve_style
-from pipeline.transcriber import merge_continuous_segments, split_into_sentences, transcribe
-from pipeline.translator import translate_segments
-from pipeline.tts import get_tts_provider, native_voices_for, synthesize_segments
+from pipeline.tts import get_tts_provider
 
 from . import stats as _stats
-
 from .config import MAX_WORKERS
 from .models import JobStatus
 from .storage import (
@@ -42,29 +28,19 @@ from .storage import (
     update_status,
 )
 
-load_dotenv()
+load_dotenv(override=True)
 
 _executor = ThreadPoolExecutor(max_workers=MAX_WORKERS)
 
 TOTAL_STEPS = 5
 
 
-class _Cancelled(Exception):
-    pass
-
-
-def _check_cancelled(job_id: str) -> None:
-    """Raise _Cancelled if the job has been cancelled by the user."""
+def _is_cancelled(job_id: str) -> bool:
     try:
         meta = _read_meta(job_id)
-        if meta.get("status") in (JobStatus.cancelled, "cancelled"):
-            raise _Cancelled()
+        return meta.get("status") in (JobStatus.cancelled, "cancelled")
     except (OSError, ValueError):
-        pass
-
-
-def _progress(job_id: str, step: int, message: str) -> None:
-    append_progress(job_id, step, TOTAL_STEPS, message)
+        return False
 
 
 def _run_job(
@@ -74,8 +50,6 @@ def _run_job(
     openai_key_override: str | None = None,
     elevenlabs_key_override: str | None = None,
 ) -> None:
-    import time as _time
-
     update_status(job_id, JobStatus.running)
 
     target_language = params["language"]
@@ -85,129 +59,60 @@ def _run_job(
     voiceover = params.get("voiceover", True)
     style = resolve_style(params.get("style", "standard"))
 
-    tracker = CostTracker()
     started_at = int(_time.time())
     segments_count = 0
     total_duration = 0.0
     error_msg: str | None = None
     final_status = JobStatus.done
+    tracker = None
+
+    src = input_path(job_id)
+    out_video = output_video_path(job_id)
+    out_srt = output_srt_path(job_id) if subtitles else None
+    orig_audio = str(original_audio_path(job_id)) if voiceover else None
+
+    opts = DubOptions(
+        target_language=target_language,
+        source_language=source_language,
+        voice=voice or None,
+        style=style,
+        voiceover=voiceover,
+        bake_voiceover=False,           # web mode: browser overlays original at user-chosen volume
+        subtitles=subtitles,
+        together_api_key=together_key_override,
+        openai_api_key=openai_key_override,
+        elevenlabs_api_key=elevenlabs_key_override,
+    )
 
     try:
-        src = input_path(job_id)
-        out_video = output_video_path(job_id)
-        out_srt = output_srt_path(job_id)
-
-        cfg = pipeline_config.get()
-        translation_client = make_translation_client(
-            cfg,
-            together_key_override=together_key_override,
-            openai_key_override=openai_key_override,
+        result = dub_video(
+            str(src),
+            str(out_video),
+            opts,
+            output_srt_path=str(out_srt) if out_srt else None,
+            original_audio_path=orig_audio,
+            on_progress=lambda step, msg: append_progress(job_id, step, TOTAL_STEPS, msg),
+            is_cancelled=lambda: _is_cancelled(job_id),
         )
-        transcription_client = make_transcription_client(
-            cfg,
-            together_key_override=together_key_override,
-            openai_key_override=openai_key_override,
+        tracker = result.cost_tracker
+        total_duration = (tracker.audio_minutes or 0.0) * 60.0
+        segments_count = len(result.aligned_segments)
+        save_segments(
+            job_id,
+            [
+                {
+                    "id": seg.id,
+                    "start": seg.start,
+                    "end": seg.end,
+                    "text": seg.text,
+                    "speaker": seg.speaker,
+                }
+                for seg in result.aligned_segments
+            ],
         )
-        tmp_dir = Path(tempfile.mkdtemp(prefix=f"vidtrans_{job_id}_"))
-
-        try:
-            _check_cancelled(job_id)
-            _progress(job_id, 1, "Extracting audio…")
-            audio_path = extract_audio(str(src), str(tmp_dir / "audio.wav"))
-            total_duration = get_video_duration(str(src))
-            tracker.audio_minutes = total_duration / 60.0
-
-            _check_cancelled(job_id)
-            _progress(job_id, 2, f"Transcribing with Whisper Large v3… (video duration: {total_duration:.0f}s)")
-            segments = transcribe(audio_path, transcription_client)
-
-            lang_code = language_code(target_language)
-
-            segments = merge_continuous_segments(segments)
-
-            _check_cancelled(job_id)
-            _progress(job_id, 3, f"Translating {len(segments)} segments to {target_language} "
-                       f"(style: {style.name})…")
-            translated = translate_segments(
-                segments, target_language, translation_client, source_language,
-                tracker=tracker,
-                style_directives=style.translation_directives,
-                style_temperature=style.temperature,
-            )
-            translated = merge_continuous_segments(translated, max_duration=float("inf"))
-            translated = split_into_sentences(translated)
-            segments_count = len(translated)
-
-            _check_cancelled(job_id)
-            effective_voice = voice or native_voices_for(lang_code)[0]
-            tts_model = cfg["models"]["tts"]
-            tts_label = tts_model["model"] if isinstance(tts_model, dict) else tts_model
-            _progress(job_id, 4, f"Synthesizing TTS with {tts_label} (voice: {effective_voice})…")
-            tts_dir = tmp_dir / "tts"
-            tts_dir.mkdir()
-
-            vo_volume = pipeline_config.get()["merge_video"].get("voiceover_volume", 0.35)
-            gap_vol = min(1.0, 2 * vo_volume) if voiceover else 1.0
-            plan = prepare_merge(
-                str(src), translated, total_duration,
-                preserve_gap_audio=voiceover,
-                original_audio_volume=1.0 if voiceover else 0.0,
-                gap_volume=gap_vol,
-            )
-            gap_exc: list[Exception] = []
-
-            def _build_gaps():
-                try:
-                    build_gap_chunks(plan)
-                except Exception as e:
-                    gap_exc.append(e)
-
-            gap_thread = threading.Thread(target=_build_gaps, daemon=True)
-            gap_thread.start()
-
-            tts_paths = synthesize_segments(
-                translated, effective_voice, str(tts_dir),
-                language=lang_code,
-                tracker=tracker,
-                speed=style.tts_speed, emotion=style.tts_emotion,
-                elevenlabs_api_key=elevenlabs_key_override,
-                openai_api_key=openai_key_override,
-            )
-            gap_thread.join()
-            if gap_exc:
-                raise gap_exc[0]
-
-            _check_cancelled(job_id)
-            _progress(job_id, 5, "Building aligned video…")
-            orig_audio = str(original_audio_path(job_id)) if voiceover else None
-            aligned_segments = build_aligned_video(
-                str(src), translated, tts_paths, total_duration, str(out_video),
-                merge_plan=plan,
-                original_audio_path=orig_audio,
-            )
-            save_segments(
-                job_id,
-                [
-                    {
-                        "id": seg.id,
-                        "start": seg.start,
-                        "end": seg.end,
-                        "text": seg.text,
-                        "speaker": seg.speaker,
-                    }
-                    for seg in aligned_segments
-                ],
-            )
-
-            if subtitles:
-                generate_srt(aligned_segments, str(out_srt))
-
-        finally:
-            shutil.rmtree(tmp_dir, ignore_errors=True)
-
         update_status(job_id, JobStatus.done)
 
-    except _Cancelled:
+    except Cancelled:
         final_status = JobStatus.cancelled
     except Exception as exc:
         error_msg = str(exc)
@@ -218,7 +123,10 @@ def _run_job(
     if final_status != JobStatus.cancelled:
         try:
             cfg = pipeline_config.get()
-            cb = tracker.cost_breakdown()
+            cb = tracker.cost_breakdown() if tracker else {
+                "whisper": {"cost": 0}, "translation": {"cost": 0},
+                "tts": {"cost": 0}, "total": 0,
+            }
             finished_at = int(_time.time())
             _stats.record_job({
                 "id": job_id,
@@ -235,9 +143,9 @@ def _run_job(
                 "tts_provider": get_tts_provider(),
                 "segments_count": segments_count,
                 "audio_seconds": total_duration,
-                "tts_characters": tracker.tts_characters,
-                "llm_input_tokens": tracker.llm_input_tokens,
-                "llm_output_tokens": tracker.llm_output_tokens,
+                "tts_characters": tracker.tts_characters if tracker else 0,
+                "llm_input_tokens": tracker.llm_input_tokens if tracker else 0,
+                "llm_output_tokens": tracker.llm_output_tokens if tracker else 0,
                 "whisper_cost_usd": cb["whisper"]["cost"],
                 "translation_cost_usd": cb["translation"]["cost"],
                 "tts_cost_usd": cb["tts"]["cost"],
@@ -293,7 +201,7 @@ def _run_url_job(
 ) -> None:
     """Download video from URL, then run the normal translation pipeline."""
     update_status(job_id, JobStatus.running)
-    _progress(job_id, 1, "Downloading video from URL…")
+    append_progress(job_id, 1, TOTAL_STEPS, "Downloading video from URL…")
 
     try:
         _download_url(job_id, url)

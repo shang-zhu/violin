@@ -11,34 +11,11 @@ from .transcriber import Segment
 
 
 def _tts_entry() -> dict[str, Any]:
-    """Return the models.tts config entry as a dict.
-
-    Supports the new dict format, the legacy plain-string format, and the
-    older `provider: cartesia` value (now treated as an alias for `together`):
-        # current
-        tts:
-          provider: together
-          model: cartesia/sonic-3
-        # legacy plain-string
-        tts: "cartesia/sonic-3"
-        # deprecated dict alias
-        tts:
-          provider: cartesia
-          model: cartesia/sonic-3
-    """
-    entry = _conf.get()["models"]["tts"]
-    if isinstance(entry, dict):
-        return entry
-    return {"provider": "together", "model": entry}
+    return _conf.get()["models"]["tts"]
 
 
 def get_tts_provider() -> str:
-    p = _tts_entry().get("provider", "together")
-    # Backward-compat: "cartesia" used to name the provider; it now refers to
-    # the model and Together AI is the API gateway.
-    if p == "cartesia":
-        return "together"
-    return p
+    return _tts_entry().get("provider", "together")
 
 
 def get_tts_model() -> str:

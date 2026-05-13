@@ -17,7 +17,7 @@ from pipeline.styles import list_styles
 from pipeline.tts import all_voices, native_voices_for, voice_descriptions
 import prompts as _prompts
 
-load_dotenv()
+load_dotenv(override=True)
 
 router = APIRouter(tags=["catalog"])
 

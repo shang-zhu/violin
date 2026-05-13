@@ -7,7 +7,7 @@ from typing import Any
 
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 
 def _parse_translation_config(cfg: dict[str, Any]) -> tuple[str, str]:

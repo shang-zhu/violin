@@ -95,7 +95,7 @@ def synthesize_segment(
     emotion: str | None = None,
 ) -> str:
     response = client.audio.speech.create(
-        model=_conf.get()["models"]["tts"]["model"] if isinstance(_conf.get()["models"]["tts"], dict) else _conf.get()["models"]["tts"],
+        model=_conf.get()["models"]["tts"]["model"],
         input=_apply_ssml(text, speed, emotion),
         voice=voice,
         response_format="wav",

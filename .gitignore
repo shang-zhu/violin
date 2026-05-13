@@ -12,7 +12,7 @@ wheels/
 examples/
 
 #logs
-out_*.log
+*.log
 jobs/
 
 .DS_Store
