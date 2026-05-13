@@ -46,7 +46,13 @@ app.mount("/static", StaticFiles(directory=str(_STATIC)), name="static")
 
 @app.get("/", include_in_schema=False)
 def root():
-    return FileResponse(str(_STATIC / "index.html"))
+    # Force the SPA shell to revalidate on every load — otherwise users keep
+    # seeing stale UI after upgrading violin-api (esp. on 127.0.0.1 vs localhost,
+    # which Chrome caches as separate origins).
+    return FileResponse(
+        str(_STATIC / "index.html"),
+        headers={"Cache-Control": "no-cache, must-revalidate"},
+    )
 
 
 # Lightweight health probe — accepts both GET and HEAD so external monitors

@@ -1,6 +1,6 @@
 ---
 name: video-translator
-description: Dub a video into another language and generate subtitles using the default Together + Cartesia stack. Trigger when the user wants to translate / dub / voice-over a video file, or generate subtitles for it. Handles `.mp4` / `.mkv` / `.webm`. Installs as the `violin` CLI (and `violin-api` for the FastAPI server) via `uv tool install`. For premium models (OpenAI / ElevenLabs) or custom configs, point the user to the repo.
+description: Dub a video into another language and generate subtitles using the default Together + Cartesia stack. Trigger when the user wants to translate / dub / voice-over a video file, or generate subtitles for it. Handles `.mp4` / `.mkv` / `.webm`. Installs as the `violin` CLI (and `violin-api` for the FastAPI server) via `uv tool install`. For alternative models (OpenAI / ElevenLabs) or custom configs, point the user to the repo: https://github.com/shang-zhu/violin.
 allowed-tools: Bash, Read
 ---
 
