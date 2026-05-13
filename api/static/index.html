@@ -390,13 +390,14 @@
           </div>
         </template>
 
-        <!-- Hint about limits (shown before a file is picked) -->
+        <!-- Hint about limits (shown only when limits are set — local default.yaml has both at 0). -->
         <p
-          x-show="inputMode === 'file' && !file && !fileError"
+          x-show="inputMode === 'file' && !file && !fileError && (maxDurationSeconds > 0 || maxFileSizeMb > 0)"
           class="-mt-4 mb-6 text-[11px] text-ink-400 text-center"
         >
-          Up to <span x-text="Math.round(maxDurationSeconds / 60)"></span> min
-          / <span x-text="maxFileSizeMb"></span> MB
+          <template x-if="maxDurationSeconds > 0"><span>Up to <span x-text="Math.round(maxDurationSeconds / 60)"></span> min</span></template>
+          <template x-if="maxDurationSeconds > 0 && maxFileSizeMb > 0"><span> / </span></template>
+          <template x-if="maxFileSizeMb > 0"><span x-text="maxFileSizeMb + ' MB'"></span></template>
         </p>
 
         <!-- URL input -->
@@ -994,8 +995,8 @@ function app() {
     inputMode: 'file',
     videoUrl: '',
     urlUploadEnabled: false,
-    maxDurationSeconds: 1800,
-    maxFileSizeMb: 500,
+    maxDurationSeconds: 0,         // 0 = unlimited (matches default.yaml); prod sets to 1800
+    maxFileSizeMb: 0,              // 0 = unlimited; prod sets to 500
     freeTrialJobs: 0,           // > 0 → public-demo mode, footer shows "Don't upload private content"
     jobTtlHours: 0,             // > 0 → footer shows "Videos auto-delete within N hours"
     fileError: '',
@@ -1119,8 +1120,8 @@ function app() {
         const cfg = await fetch('/app-config');
         const data = await cfg.json();
         this.urlUploadEnabled = !!data.url_upload;
-        if (data.max_duration_seconds) this.maxDurationSeconds = data.max_duration_seconds;
-        if (data.max_file_size_mb) this.maxFileSizeMb = data.max_file_size_mb;
+        this.maxDurationSeconds = data.max_duration_seconds ?? 0;
+        this.maxFileSizeMb = data.max_file_size_mb ?? 0;
         this.freeTrialJobs = data.free_trial_jobs ?? 0;
         this.jobTtlHours = data.job_ttl_hours ?? 0;
       } catch (_) {}
