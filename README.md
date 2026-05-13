@@ -33,10 +33,8 @@ The live demo runs at **<https://violin-ai.com>** — drop a short clip in, get 
 Requires **Python 3.13+** and **ffmpeg** on PATH.
 
 ```bash
-git clone https://github.com/shang-zhu/violin.git
-cd violin
-uv sync
-cp .env.example .env          # then fill in TOGETHER_API_KEY (get one at https://api.together.ai)
+uv tool install --pre violin     # --pre needed while v0.1 is in alpha
+export TOGETHER_API_KEY=...      # get one at https://api.together.ai (add to ~/.zshrc to persist)
 ```
 
 Three ways to use it:
@@ -44,13 +42,13 @@ Three ways to use it:
 **1. CLI** — translate one file:
 
 ```bash
-uv run main.py assets/demo_en.mp4.mp4 assets/demo_en_zh.mp4 --language Chinese
+violin lecture.mp4 lecture_zh.mp4 --language Chinese
 ```
 
 **2. Web app** — full REST API + browser UI:
 
 ```bash
-uv run run_api.py
+violin-api
 # → http://127.0.0.1:8000           (browser UI)
 # → http://127.0.0.1:8000/docs      (interactive API docs)
 ```
@@ -58,10 +56,21 @@ uv run run_api.py
 **3. Claude Code skill** — invoke from any Claude Code session:
 
 ```bash
-cp -r .claude/skills/video-translator ~/.claude/skills/
+violin --install-skill          # one-time: copies the skill into ~/.claude/skills/
 claude
-> please use the violin skill to translate assets/demo_en.mp4 into Chinese
+> please use the violin skill to translate path/to/video.mp4 into Chinese
 ```
+
+<details><summary>Run from source (for hacking on the pipeline)</summary>
+
+```bash
+git clone https://github.com/shang-zhu/violin.git
+cd violin
+uv sync
+cp .env.example .env             # then fill in TOGETHER_API_KEY
+uv run main.py lecture.mp4 lecture_zh.mp4 --language Chinese
+```
+</details>
 
 ---
 
@@ -144,30 +153,32 @@ Six built-in profiles tune both the translation LLM prompt and the TTS delivery.
 
 Add your own by editing `prompts/styles.yaml`.
 
-See all available styles: `uv run main.py --style list`.
+See all available styles: `violin --style list`.
 
 ---
 
 ## 💻 CLI usage
 
+> Examples use the PyPI-installed `violin` command. If you're running from a git checkout, substitute `uv run main.py` for `violin` (and `uv run run_api.py` for `violin-api`).
+
 ```bash
 # Basic
-uv run main.py lecture.mp4 lecture_es.mp4 --language Spanish
+violin lecture.mp4 lecture_es.mp4 --language Spanish
 
 # Pick a style
-uv run main.py talk.mp4 talk_zh.mp4 --language Chinese --style kids
+violin talk.mp4 talk_zh.mp4 --language Chinese --style kids
 
 # Pick a specific voice
-uv run main.py lecture.mp4 lecture_fr.mp4 --language French --voice "french narrator man"
+violin lecture.mp4 lecture_fr.mp4 --language French --voice "french narrator man"
 
 # Skip SRT
-uv run main.py lecture.mp4 lecture_ja.mp4 --language Japanese --no-subtitles
+violin lecture.mp4 lecture_ja.mp4 --language Japanese --no-subtitles
 
 # Full replacement (no original audio underneath)
-uv run main.py lecture.mp4 lecture_ko.mp4 --language Korean --no-voiceover
+violin lecture.mp4 lecture_ko.mp4 --language Korean --no-voiceover
 
 # Custom config (e.g. switch to OpenAI/ElevenLabs)
-uv run main.py lecture.mp4 lecture_it.mp4 --language Italian --config config/other_api.yaml
+violin lecture.mp4 lecture_it.mp4 --language Italian --config config/other_api.yaml
 ```
 
 ### CLI flags
@@ -188,9 +199,9 @@ uv run main.py lecture.mp4 lecture_it.mp4 --language Italian --config config/oth
 ## 🛰️ Web app & REST API
 
 ```bash
-uv run run_api.py                              # default dev mode
-uv run run_api.py --host 0.0.0.0 --port 8080   # bind everywhere
-uv run run_api.py --config config/prod.yaml    # production overrides
+violin-api                              # default dev mode
+violin-api --host 0.0.0.0 --port 8080   # bind everywhere
+violin-api --config config/prod.yaml    # production overrides (requires a git checkout for config/prod.yaml)
 ```
 
 Core flow: `POST /jobs` to start, `GET /jobs/{id}` to poll, `GET /jobs/{id}/video` and `/srt` to download, `POST /jobs/{id}/chat` for in-video Q&A. Full list with request/response schemas at **`/docs`**.

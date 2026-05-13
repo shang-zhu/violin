@@ -45,6 +45,23 @@ def _print_styles() -> None:
             print(f"  {'':14s}  TTS: {', '.join(parts)}")
 
 
+def _install_skill() -> None:
+    """Copy the bundled Claude Code skill into ~/.claude/skills/ and exit."""
+    import shutil
+    src = Path(__file__).resolve().parent / ".claude" / "skills" / "video-translator"
+    if not src.is_dir():
+        sys.stderr.write(
+            f"ERROR: bundled skill files not found at {src}\n"
+            "       This usually means an older Violin release that predates "
+            "the install-skill feature — upgrade with `uv tool install --pre --upgrade violin`.\n"
+        )
+        sys.exit(1)
+    dst = Path.home() / ".claude" / "skills" / "video-translator"
+    dst.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(src, dst, dirs_exist_ok=True)
+    print(f"Installed Violin skill → {dst}")
+
+
 def translate_video(
     input_path: str,
     output_path: str,
@@ -146,8 +163,16 @@ def main() -> None:
         "--timings-out", default=None,
         help="Write per-step wall-clock timings as JSON to this path on success"
     )
+    parser.add_argument(
+        "--install-skill", action="store_true",
+        help="Copy the Violin Claude Code skill to ~/.claude/skills/ and exit"
+    )
 
     args = parser.parse_args()
+
+    if args.install_skill:
+        _install_skill()
+        sys.exit(0)
 
     pipeline_config.load(args.config)
 
@@ -156,7 +181,7 @@ def main() -> None:
         sys.exit(0)
 
     if not args.input or not args.output or not args.language:
-        parser.error("input, output, and --language are required (unless using --style list)")
+        parser.error("input, output, and --language are required (unless using --style list or --install-skill)")
 
     from pipeline.llm_client import validate_env
     missing = validate_env(pipeline_config.get())

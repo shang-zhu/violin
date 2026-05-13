@@ -161,7 +161,7 @@
 
   <!-- Demo gallery: 3 cards. Click ▶ to preview, "Try this" to load into the form. -->
   <section
-    x-show="phase === 'upload'"
+    x-show="phase === 'upload' && demosAvailable"
     @keydown.escape.window="demoOpen && closeDemo()"
     class="mx-auto px-4 pb-8 max-w-xl"
   >
@@ -181,6 +181,7 @@
             <img
               :src="item.poster"
               :alt="item.title"
+              @error="demosAvailable = false"
               class="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity"
               loading="lazy"
             />
@@ -868,7 +869,7 @@
         Questions? <a href="mailto:heyviolinai@gmail.com" class="underline underline-offset-2 hover:text-ink-500 transition-colors">heyviolinai@gmail.com</a>
       </p>
       <p class="text-[11px] text-ink-300/80 tracking-wide max-w-md mx-auto pt-2">
-        Research beta — translations may contain errors. Don't upload private content. Videos auto-delete within 24 hours.
+        Research beta — translations may contain errors.<template x-if="freeTrialJobs > 0"><span> Don't upload private content.</span></template><template x-if="jobTtlHours > 0"><span> Videos auto-delete within <span x-text="jobTtlHours"></span> hours.</span></template>
       </p>
     </div>
 
@@ -995,6 +996,8 @@ function app() {
     urlUploadEnabled: false,
     maxDurationSeconds: 1800,
     maxFileSizeMb: 500,
+    freeTrialJobs: 0,           // > 0 → public-demo mode, footer shows "Don't upload private content"
+    jobTtlHours: 0,             // > 0 → footer shows "Videos auto-delete within N hours"
     fileError: '',
 
     // demo gallery
@@ -1002,6 +1005,7 @@ function app() {
     demoActiveIdx: 0,
     demoVersion: 'dub',          // 'orig' | 'dub'
     loadingDemoIdx: -1,
+    demosAvailable: true,        // flipped to false on the first poster 404 (e.g. pip-installed without demo clips)
     demoItems: [
       {
         title: 'GPT-OSS launch',
@@ -1117,6 +1121,8 @@ function app() {
         this.urlUploadEnabled = !!data.url_upload;
         if (data.max_duration_seconds) this.maxDurationSeconds = data.max_duration_seconds;
         if (data.max_file_size_mb) this.maxFileSizeMb = data.max_file_size_mb;
+        this.freeTrialJobs = data.free_trial_jobs ?? 0;
+        this.jobTtlHours = data.job_ttl_hours ?? 0;
       } catch (_) {}
       await this._checkTrial();
       this._resumeJob();

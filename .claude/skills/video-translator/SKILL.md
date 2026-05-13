@@ -18,7 +18,7 @@ test -f "<input>"                 # 2. Input exists
 printenv TOGETHER_API_KEY         # 3. Key available
 ```
 
-If `violin` is missing: tell the user to `uv tool install .` from a Violin checkout. Do not auto-install.
+If `violin` is missing: tell the user to `uv tool install --pre violin` (the `--pre` flag is needed while v0.1 is in alpha on PyPI — drop it once a stable release ships), then `violin --install-skill` to refresh this skill file. Do not auto-install.
 
 If `TOGETHER_API_KEY` is missing:
 - Inside the Violin repo → populate `.env` (auto-loaded)

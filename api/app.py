@@ -58,11 +58,20 @@ def health():
 
 @app.get("/app-config", include_in_schema=False)
 def app_config():
-    from .config import MAX_DURATION_SECONDS, MAX_FILE_SIZE_MB, URL_UPLOAD
+    from .config import (
+        FREE_TRIAL_JOBS,
+        JOB_TTL_HOURS,
+        MAX_DURATION_SECONDS,
+        MAX_FILE_SIZE_MB,
+        URL_UPLOAD,
+    )
     return {
         "url_upload": URL_UPLOAD,
         "max_duration_seconds": MAX_DURATION_SECONDS,
         "max_file_size_mb": MAX_FILE_SIZE_MB,
+        # Used by the footer to hide privacy/auto-delete warnings on local deployments.
+        "free_trial_jobs": FREE_TRIAL_JOBS,
+        "job_ttl_hours": JOB_TTL_HOURS,
     }
 
 
