@@ -2,7 +2,7 @@
 
 **Open-source video dubbing — translate any video into 33 languages with natural-sounding voice-over and synced subtitles.**
 
-[🌐 Live demo](https://violin-ai.com) · [📜 MIT License](LICENSE)
+[🌐 Live demo](https://violin-ai.com) · [📜 MIT License](https://github.com/shang-zhu/violin/blob/main/LICENSE)
 
 <!-- ![demo](assets/outcome.png) -->
 
@@ -33,8 +33,11 @@ The live demo runs at **<https://violin-ai.com>** — drop a short clip in, get 
 Requires **Python 3.10+** and **ffmpeg** on PATH.
 
 ```bash
-uv tool install --pre violin     # --pre needed while v0.1 is in alpha
-export TOGETHER_API_KEY=...      # get one at https://api.together.ai (add to ~/.zshrc to persist)
+curl -LsSf https://astral.sh/uv/install.sh | sh   # install uv if you don't have it
+uv tool install violin                            # recommended — faster, isolated
+# or: pip install violin                          # if you'd rather install into your current Python env
+
+export TOGETHER_API_KEY=...                       # get one at https://api.together.ai (add to ~/.zshrc to persist)
 ```
 
 Three ways to use it:
@@ -93,17 +96,11 @@ Video
                                     write output mp4 + optional SRT
 ```
 
-Key engineering decisions worth a look if you're forking:
-
-- **`pipeline/transcriber.py`** — uses Whisper's word-level timestamps to split into precise sentence boundaries. Has a hallucination filter that re-uses Whisper's own `no_speech_prob` segment metadata (no hand-tuned heuristics).
-- **`pipeline/merger.py`** — concatenates speed-adjusted video chunks, but builds the audio track *once* from concatenated PCM and encodes AAC at the end. This is the difference between "subtitles drift 1–2 s by the end of an 8 min video" and "perfectly synced throughout."
-- **`pipeline/tts_*.py`** — Cartesia + ElevenLabs backends share an interface. ElevenLabs side ships 21 premade voices (multilingual via `eleven_v3`) plus 15 hand-picked native-speaker voices from the Voice Library.
-
 ---
 
 ## ⚙️ Configuration
 
-All defaults live in `config/default.yaml`. Override with `--config my.yaml` (only the keys you want to change need to appear in the override file — values deep-merge).
+Override any default by writing your own YAML and passing it with `--config my.yaml` — only the keys you want to change need to appear; values deep-merge with the [built-in defaults](https://github.com/shang-zhu/violin/blob/main/config/default.yaml).
 
 ### Switch providers
 
@@ -270,7 +267,7 @@ This is a personal open-source project, not a Together AI product. Users are res
 
 ## 📜 License
 
-[MIT](LICENSE) — use it freely, including commercially.
+[MIT](https://github.com/shang-zhu/violin/blob/main/LICENSE) — use it freely, including commercially.
 
 ---
 
