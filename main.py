@@ -22,7 +22,6 @@ from pathlib import Path
 warnings.filterwarnings("ignore")
 
 from dotenv import load_dotenv
-from together import Together
 
 from pipeline import config as pipeline_config
 from pipeline.costs import CostTracker
@@ -68,12 +67,10 @@ def translate_video(
     voiceover: bool = True,
     timings_out: str | None = None,
 ) -> None:
-    api_key = os.environ.get("TOGETHER_API_KEY")
-    if not api_key:
-        raise RuntimeError("TOGETHER_API_KEY environment variable is not set.")
-
-    client = Together(api_key=api_key)
     cfg = pipeline_config.get()
+    # Each provider client validates its own API key; the user only needs the
+    # keys for the providers they've actually selected in config (e.g. just
+    # OPENAI_API_KEY when all stages are configured for OpenAI).
     translation_client = make_translation_client(cfg)
     transcription_client = make_transcription_client(cfg)
     tmp_dir = Path(tempfile.mkdtemp(prefix="vidtrans_"))
@@ -125,7 +122,7 @@ def translate_video(
         if voice != "tutorial man":
             effective_voice = voice
         else:
-            gender_idx = 0 if pipeline_config.get()["pipeline"]["voice_gender"] == "male" else 1
+            gender_idx = 0 if pipeline_config.get()["preferences"]["voice_gender"] == "male" else 1
             effective_voice = native_voices_for(lang_code)[gender_idx]
 
         vo_volume = pipeline_config.get()["merge_video"].get("voiceover_volume", 0.35)
@@ -148,7 +145,7 @@ def translate_video(
         gap_thread.start()
 
         tts_paths = synthesize_segments(
-            translated, effective_voice, str(tts_dir), client,
+            translated, effective_voice, str(tts_dir),
             language=lang_code, tracker=tracker,
             speed=style.tts_speed, emotion=style.tts_emotion,
         )
@@ -248,6 +245,15 @@ def main() -> None:
     if not args.input or not args.output or not args.language:
         parser.error("input, output, and --language are required (unless using --style list)")
 
+    from pipeline.llm_client import validate_env
+    missing = validate_env(pipeline_config.get())
+    if missing:
+        sys.stderr.write(
+            f"ERROR: missing required environment variable(s): {', '.join(missing)}\n"
+            f"       Set them in .env or export them before running.\n"
+        )
+        sys.exit(1)
+
     if args.no_voiceover:
         voiceover = False
     elif args.voiceover:
@@ -255,7 +261,7 @@ def main() -> None:
     else:
         voiceover = True
 
-    style_name = args.style or pipeline_config.get()["pipeline"].get("style", "standard")
+    style_name = args.style or pipeline_config.get()["preferences"].get("style", "standard")
     style = resolve_style(style_name)
 
     translate_video(

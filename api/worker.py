@@ -10,7 +10,6 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from dotenv import load_dotenv
-from together import Together
 
 from pipeline import config as pipeline_config
 from pipeline.costs import CostTracker
@@ -79,11 +78,6 @@ def _run_job(
 
     update_status(job_id, JobStatus.running)
 
-    api_key = together_key_override or os.environ.get("TOGETHER_API_KEY")
-    if not api_key:
-        update_status(job_id, JobStatus.failed, "No API key available. Please provide your own Together API key.")
-        return
-
     target_language = params["language"]
     voice = params["voice"]
     source_language = params["source_language"]
@@ -103,7 +97,6 @@ def _run_job(
         out_video = output_video_path(job_id)
         out_srt = output_srt_path(job_id)
 
-        client = Together(api_key=api_key)
         cfg = pipeline_config.get()
         translation_client = make_translation_client(
             cfg,
@@ -173,11 +166,12 @@ def _run_job(
             gap_thread.start()
 
             tts_paths = synthesize_segments(
-                translated, effective_voice, str(tts_dir), client,
+                translated, effective_voice, str(tts_dir),
                 language=lang_code,
                 tracker=tracker,
                 speed=style.tts_speed, emotion=style.tts_emotion,
                 elevenlabs_api_key=elevenlabs_key_override,
+                openai_api_key=openai_key_override,
             )
             gap_thread.join()
             if gap_exc:

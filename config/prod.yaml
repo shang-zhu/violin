@@ -1,20 +1,21 @@
-# Production overrides — premium models (OpenAI translation, ElevenLabs TTS)
-# with high per-job ffmpeg parallelism. Jobs are serialized at the API layer
-# to keep the ffmpeg multiplier bounded.
-# Only fields listed here override default.yaml; everything else inherits.
-# Load with:  uvicorn api.main:app  +  CONFIG=config/prod.yaml
-# (or wherever the launcher reads the config path).
+# Production overrides for the live demo (c7g.xlarge, 4 vCPU / 8 GB).
+# Only fields that differ from config/default.yaml are listed.
+# Load with:  uv run run_api.py --config config/prod.yaml
+# (the Dockerfile does this by default).
 
 # ── Concurrency ─────────────────────────────────────────────
-# Each ffmpeg process uses ~300MB RAM. Total processes = api.max_workers ×
-# merge_video.workers = 1 × 16 = 16 (~4.8GB peak during merge stage).
+# Each ffmpeg process uses ~300MB RAM. Total peak = api.max_workers (1) ×
+# merge_video.workers (4) ≈ 1.2 GB on this 4-vCPU / 8 GB box. Serializes
+# jobs at the API layer so a single job goes fast (4 parallel ffmpegs) and
+# there's never a thundering herd.
 merge_video:
   workers: 4
-  preset: "ultrafast"        # already default — fastest x264 path, lowest CPU
 
+# ── Public-demo guardrails ──────────────────────────────────
 api:
-  max_workers: 1             # serialize jobs to avoid the multiplier blowing up RAM
-  free_trial_jobs: 1         # jobs allowed per IP without a user-provided API key (0 = unlimited)
-  url_upload: false          # don't allow users to paste video URLs (yt-dlp); set true to enable
-  max_duration_seconds: 1800 # reject videos longer than 30 min — keeps API spend & ffmpeg load bounded
-  max_file_size_mb: 500      # reject uploads larger than 500 MB — covers ~30 min 720p H.264 with headroom
+  max_workers: 1             # serialize jobs — predictable RAM, no thundering herd
+  free_trial_jobs: 1         # let each IP try once for free before needing their own key
+  job_ttl_hours: 24          # auto-delete completed/failed jobs older than 24h (prevents disk fill on long-running server)
+  url_upload: false          # disable yt-dlp URL ingest on the public demo
+  max_duration_seconds: 1800 # reject videos longer than 30 min — bounds API spend
+  max_file_size_mb: 500      # reject uploads larger than 500 MB — covers ~30 min 720p H.264

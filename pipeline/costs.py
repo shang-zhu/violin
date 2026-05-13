@@ -41,47 +41,28 @@ class CostTracker:
     def cost_breakdown(self) -> dict:
         """Return a serializable per-stage cost breakdown for the current run.
 
-        Pricing is read from the active pipeline config. Falls back gracefully
-        when the active provider has no pricing entry (cost reported as 0).
+        Pricing comes from ``pipeline.pricing`` — informational only; updates
+        there are needed when an external provider changes rates.
         """
-        from . import config as _conf
+        from . import config as _conf, pricing as _pricing
         from .llm_client import get_transcription_provider, get_translation_provider
         from .tts import get_tts_provider
 
         cfg = _conf.get()
-        pricing = cfg["pricing"]
 
-        # ── whisper ──────────────────────────────────────
         whisper_provider = get_transcription_provider(cfg)
-        whisper_pricing = pricing.get("whisper")
-        if isinstance(whisper_pricing, dict):
-            whisper_per_min = whisper_pricing.get(whisper_provider,
-                                                  whisper_pricing.get("together", 0.0))
-        else:
-            whisper_per_min = pricing.get("whisper_per_minute", 0.0)
+        whisper_per_min = _pricing.whisper_per_minute(whisper_provider)
         whisper_cost = self.audio_minutes * whisper_per_min
 
-        # ── translation ──────────────────────────────────
         translation_provider = get_translation_provider(cfg)
-        llm_pricing = pricing["translation"].get(
-            translation_provider, pricing["translation"].get("together", {})
-        )
+        llm_rates = _pricing.translation_rates(translation_provider)
         llm_cost = (
-            self.llm_input_tokens / 1_000_000 * llm_pricing.get("per_m_input_tokens", 0.0)
-            + self.llm_output_tokens / 1_000_000 * llm_pricing.get("per_m_output_tokens", 0.0)
+            self.llm_input_tokens / 1_000_000 * llm_rates["per_m_input_tokens"]
+            + self.llm_output_tokens / 1_000_000 * llm_rates["per_m_output_tokens"]
         )
 
-        # ── tts ──────────────────────────────────────────
         tts_provider = get_tts_provider()
-        tts_pricing = pricing.get("tts", {})
-        if isinstance(tts_pricing, (int, float)):
-            tts_per_m = float(tts_pricing)
-        elif "per_m_characters" in tts_pricing:
-            tts_per_m = tts_pricing["per_m_characters"]
-        else:
-            tts_per_m = tts_pricing.get(tts_provider, {}).get("per_m_characters", 0.0)
-        if not tts_per_m:
-            tts_per_m = pricing.get("tts_per_m_characters", 0.0)
+        tts_per_m = _pricing.tts_per_m_characters(tts_provider)
         tts_cost = self.tts_characters / 1_000_000 * tts_per_m
 
         return {
@@ -136,3 +117,7 @@ class CostTracker:
         print(f"  {'TOTAL API COST':<22}"
               f"                     ${cb['total']:>8.4f}")
         print("=" * 62)
+        from . import pricing as _pricing
+        print(f"  Estimates use rates from pipeline/pricing.py "
+              f"(last updated {_pricing.LAST_UPDATED}). Check the provider's")
+        print(f"  dashboard for your real bill.")

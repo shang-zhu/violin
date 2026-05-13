@@ -1,4 +1,9 @@
-"""Cartesia Sonic 3 TTS backend (via Together AI serverless)."""
+"""Together AI TTS backend.
+
+Currently supports `cartesia/sonic-3` only. Together's serverless catalog also
+includes Kokoro and Orpheus (and other Cartesia versions); adding them needs a
+model-specific voice catalog — see ``_NATIVE_VOICES`` below for the shape.
+"""
 
 import re
 import subprocess

@@ -13,7 +13,6 @@ examples/
 
 #logs
 out_*.log
-translate_debug/
 jobs/
 
 .DS_Store

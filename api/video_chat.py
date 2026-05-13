@@ -1,20 +1,19 @@
-"""Frame-aware chat helpers built on Together chat models."""
+"""Frame-aware chat helpers — uses the same LLM provider as translation."""
 
 from __future__ import annotations
 
 import base64
-import os
 import subprocess
 import tempfile
 from pathlib import Path
 
 from dotenv import load_dotenv
-from together import Together
 
 from api.models import ChatMessage, SubtitleSegment, VideoChatResponse
 from api.storage import get_job, load_segments, output_video_path
 from pipeline import config as _conf
 from pipeline.ffmpeg_utils import FFMPEG_EXE, get_duration_video
+from pipeline.llm_client import get_chat_model, make_chat_client
 import prompts as _prompts
 
 load_dotenv()
@@ -22,9 +21,7 @@ load_dotenv()
 
 def _chat_cfg() -> dict:
     cfg = _conf.get()
-    chat = dict(cfg["chat"])
-    chat.setdefault("model", cfg["models"].get("video_chat"))
-    return chat
+    return {**cfg["chat"], "model": get_chat_model(cfg)}
 
 
 def _pick_context_window(segments: list[SubtitleSegment], current_time: float) -> tuple[float, float, list[SubtitleSegment]]:
@@ -140,10 +137,6 @@ def _build_messages(
 
 
 def answer_video_question(job_id: str, question: str, current_time: float, history: list[ChatMessage], language: str = "") -> VideoChatResponse:
-    api_key = os.environ.get("TOGETHER_API_KEY")
-    if not api_key:
-        raise RuntimeError("TOGETHER_API_KEY is not configured.")
-
     job = get_job(job_id)
     if job is None:
         raise FileNotFoundError(f"Job '{job_id}' not found.")
@@ -163,7 +156,7 @@ def answer_video_question(job_id: str, question: str, current_time: float, histo
         if (url := _frame_as_data_url(video_path, ts)) is not None
     ]
 
-    client = Together(api_key=api_key)
+    client = make_chat_client(_conf.get())
     cfg = _chat_cfg()
     response = client.chat.completions.create(
         model=cfg["model"],

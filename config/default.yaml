@@ -4,47 +4,39 @@
 # ── Models ──────────────────────────────────────────────────
 models:
   transcription:
-    provider: together                  # "together" or "openai"
-    model: openai/whisper-large-v3      # for openai use "whisper-1"
+    provider: together                  # "together" | "openai"
+    model: openai/whisper-large-v3      # together → openai/whisper-large-v3 | openai → whisper-1
   translation:
-    provider: together                  # "openai" or "together"
-    model: deepseek-ai/DeepSeek-V4-Pro
-    # provider: openai
-    # model: gpt-5.4-mini
+    provider: together                  # "together" | "openai"
+    model: deepseek-ai/DeepSeek-V4-Pro  # together → deepseek-ai/DeepSeek-V4-Pro | openai → gpt-5.5
   tts:
-    provider: cartesia                # "cartesia" or "elevenlabs"
-    model: cartesia/sonic-3
-    # provider: elevenlabs
-    # model: eleven_v3
-  video_chat: "deepseek-ai/DeepSeek-V4-Pro"
+    provider: together                  # "together" | "elevenlabs" | "openai"
+    model: cartesia/sonic-3             # together → cartesia/sonic-3 | elevenlabs → eleven_v3 | openai → tts-1-hd
+  chat:
+    provider: together                  # "together" | "openai" — must be vision-capable (sees sampled video frames)
+    model: Qwen/Qwen3.5-397B-A17B       # together → Qwen/Qwen3.5-397B-A17B | openai → gpt-5.5
 
-# ── Pricing ──────────────────────────────────────────────────
-pricing:
-  whisper:
-    together: 0.0015                  # Together AI Whisper Large v3, per audio minute
-    openai: 0.006                     # OpenAI whisper-1, per audio minute
-  whisper_per_minute: 0.0015          # legacy flat key — kept for backward compat
-  tts:
-    cartesia:
-      per_m_characters: 65.00         # Together AI Cartesia Sonic 3
-    elevenlabs:
-      per_m_characters: 165.00        # ElevenLabs eleven_v3 (~$0.165 / 1k chars on Creator tier)
-    openai:
-      per_m_characters: 30.00         # tts-1-hd ($30/1M); tts-1 is $15/1M — adjust if model changed
-  translation:
-    together:                          # Together AI serverless
-      per_m_input_tokens: 0.30
-      per_m_output_tokens: 1.20
-    openai:                            # OpenAI API
-      per_m_input_tokens: 0.75         # gpt-5.4-mini
-      per_m_output_tokens: 4.50
+# ── Preferences ─────────────────────────────────────────────
+# What to use when a request doesn't explicitly pick a style/voice.
+preferences:
+  style: "standard"      # "standard" | "kids" | "academic" | "casual" | "storyteller" | "news" — see prompts/styles.yaml
+  voice_gender: "male"   # "male" | "female" — picks the default native voice
 
-# ── Translation ─────────────────────────────────────────────
+# Below: per-stage tuning knobs in pipeline execution order
+# (audio extract → transcription → translation → tts → segment merge → video merge → api → chat)
+# These ship tuned for the default stack — typical users don't need to touch
+# anything past this line. Override them in a separate YAML loaded with --config.
+
+# ── 1. Transcription ────────────────────────────────────────
+transcription:
+  chunk_seconds: 600   # split audio into chunks of this length (seconds) for Whisper
+  parallel_workers: 2  # number of parallel Whisper API calls for chunked audio
+
+# ── 2. Translation ──────────────────────────────────────────
 translation:
   batch_size: 64
   max_retries: 3
   temperature: 0.3
-  debug_dir: "translate_debug"
   # ASR correction hints — tell the LLM about known transcription errors so it can fix
   # them during translation. Format: "wrong → correct (context)".
   asr_corrections:
@@ -52,144 +44,19 @@ translation:
     - "04 → o4 (OpenAI model name, e.g. o4-mini)"
     - "01 → o1 (OpenAI model name)"
 
-# ── TTS ─────────────────────────────────────────────────────
+# ── 3. TTS ──────────────────────────────────────────────────
 tts:
   workers: 8
   tail_silence_ms: 120              # (ms) silence after segments ending in a comma / mid-clause break (keeps speech flowing)
-  sentence_tail_silence_ms: 250    # (ms) silence after a sentence-ending mark (period/!?/。！？) — longer to feel natural
+  sentence_tail_silence_ms: 250     # (ms) silence after a sentence-ending mark (period/!?/。！？) — longer to feel natural
 
-# ── Pipeline defaults ───────────────────────────────────────────
-pipeline:
-  style: "standard"      # default style profile (see "styles" section below)
-  voice_gender: "male"   # "male" or "female" — picks the default native voice
-
-# ── Style profiles ───────────────────────────────────────────────
-# Each style controls translation tone (LLM prompt) and voice delivery
-# (Cartesia SSML tags).  Add your own styles here or in a custom config.
-styles:
-  standard:
-    description: "Faithful translation, natural voice"
-    translation:
-      directives: ""
-      temperature: null
-    tts:
-      speed: null
-      emotion: null
-
-  kids:
-    description: "Kid-friendly: rewritten for a 7-year-old"
-    translation:
-      temperature: 0.6
-      directives: |
-        You are NOT doing a literal translation. You are REWRITING the content
-        so a 7-year-old child can understand it. This is your top priority —
-        it overrides any other instruction about faithfulness.
-
-        MANDATORY RULES:
-        - Replace ALL technical jargon with plain, child-friendly explanations
-          in the target language. For example, instead of translating
-          "machine learning" literally, say the equivalent of "teaching computers
-          to learn by themselves". Instead of "algorithm", say "a set of
-          step-by-step instructions". Instead of "neural network", say
-          "a computer brain that copies how our brains work".
-        - Use short sentences (max 15 words each). Break long sentences apart.
-        - Use everyday words a child already knows. No academic vocabulary.
-        - Add brief fun analogies when it helps (e.g. "it's kind of like...").
-        - Drop filler phrases, hedging, and verbose academic courtesy.
-        - Keep proper names (people, places, courses) but simplify everything else.
-    tts:
-      speed: null
-      emotion: "excited"
-
-  academic:
-    description: "Scholarly: formal register, precise terminology"
-    translation:
-      temperature: 0.2
-      directives: |
-        Translate in a scholarly, academic register:
-        - Preserve ALL technical terminology exactly — never simplify jargon.
-        - Use the most formal written register the target language offers.
-          Prefer literary/elevated connectors over colloquial ones.
-        - Use classical or high-register phrasing where natural in the target language.
-        - Use full titles and honorifics (e.g. "Professor", "Dr.") — never drop them.
-        - Maintain complex sentence structures; do not break them into shorter ones.
-        - Keep citations, references, and technical acronyms untranslated.
-    tts:
-      speed: 0.95
-      emotion: "calm"
-
-  casual:
-    description: "Casual: spoken slang, like chatting with a friend"
-    translation:
-      temperature: 0.6
-      directives: |
-        Translate as if you're a friend casually explaining this to someone
-        over coffee. This is NOT a formal translation — be loose and natural.
-
-        MANDATORY RULES:
-        - Use spoken, colloquial language — contractions, slang, filler words
-          that are natural in the target language.
-        - Prefer informal connectors and discourse markers over formal ones.
-        - Shorten and simplify where possible. Drop formality entirely.
-        - Use the most casual form of "you" the target language offers.
-        - Add conversational flavor — idioms, interjections, and hedges
-          that native speakers actually use in everyday speech.
-        - It's OK to rephrase for naturalness — don't be a robot.
-    tts:
-      speed: 1.1
-      emotion: "content"
-
-  storyteller:
-    description: "Dramatic: vivid narration with flair"
-    translation:
-      temperature: 0.7
-      directives: |
-        Translate as a dramatic storyteller narrating an exciting tale.
-        You have creative license to rephrase for maximum impact.
-
-        MANDATORY RULES:
-        - Use vivid, evocative language — paint pictures with words.
-        - Add dramatic flair: rhetorical questions, suspense, exclamations.
-        - Build tension and excitement ("Imagine this...", "What happened next
-          was remarkable...") — adapt these patterns naturally to the target language.
-        - Use literary devices: metaphor, contrast, rhythm.
-        - Vary sentence length for pacing — short punchy lines for impact,
-          flowing sentences for description.
-        - Keep the core meaning but make it captivating to listen to.
-    tts:
-      speed: 0.9
-      emotion: "enthusiastic"
-
-  news:
-    description: "News anchor: concise, authoritative, no fluff"
-    translation:
-      temperature: 0.2
-      directives: |
-        Translate in the style of a professional news broadcast.
-
-        MANDATORY RULES:
-        - Be concise — cut filler words, hedging, and redundancy aggressively.
-        - Use clear, declarative sentences. No questions or exclamations.
-        - Prefer active voice. State facts directly.
-        - Use formal but accessible language — not academic, not casual.
-        - Compress wordy explanations into tight, newsworthy phrasing.
-        - Keep proper nouns and numbers exact.
-    tts:
-      speed: 1.0
-      emotion: "neutral"
-
-# ── Transcription ────────────────────────────────────────────
-transcription:
-  chunk_seconds: 600   # split audio into chunks of this length (seconds) for Whisper
-  parallel_workers: 2  # number of parallel Whisper API calls for chunked audio
-
-# ── Segment merging (combine Whisper fragments into sentences) ──
+# ── 4. Segment merging (combine Whisper fragments into sentences) ──
 merge:
   max_gap: 1.0           # seconds — merge if gap between segments is smaller
   max_duration: 60.0     # seconds — never merge beyond this total length
   max_subtitle_chars: 20 # split sub-sentences longer than this at clause punctuation (、，；,;)
 
-# ── Video merge / alignment ─────────────────────────────────
+# ── 5. Video merge / alignment ──────────────────────────────
 merge_video:
   workers: 16           # concurrent ffmpeg processes per job (each ~300MB RAM); raise this on slower instances via prod.yaml
   output_fps: 30
@@ -202,21 +69,20 @@ merge_video:
   preset: "ultrafast"
   voiceover_volume: 0.1  # 0.0–1.0 — original audio level for CLI voiceover mode
 
-# ── API server ──────────────────────────────────────────────
+# ── 6. API server ───────────────────────────────────────────
 api:
   jobs_dir: "jobs"
-  max_workers: 1             # concurrent jobs (× merge_video.workers = total ffmpeg processes); lower on small instances via prod.yaml
-  job_ttl_hours: 24          # auto-delete completed/failed jobs older than this (0 = disable)
-  free_trial_jobs: 1         # jobs allowed per IP without a user-provided API key (0 = unlimited)
+  max_workers: 4             # concurrent jobs (× merge_video.workers = total ffmpeg processes); lower on small instances via prod.yaml
+  job_ttl_hours: 0           # auto-delete completed/failed jobs older than this hours (0 = disable; set in prod.yaml for public deployments)
+  free_trial_jobs: 0         # free jobs per IP before requiring a user-provided API key (0 = BYOK-only)
   url_upload: true           # allow users to paste video URLs (yt-dlp); set false to disable
   max_duration_seconds: 0    # reject videos longer than this in seconds (0 = unlimited); set in prod.yaml
   max_file_size_mb: 0        # reject uploads larger than this in MB (0 = unlimited); set in prod.yaml
 
-# ── Video chat ──────────────────────────────────────────────
+# ── 7. Video chat (post-job Q&A over dubbed video) ──────────
 chat:
   context_window_seconds: 60
   frame_interval_seconds: 10
   max_frames: 6
   temperature: 0.2
   max_tokens: 512
-  model: "Qwen/Qwen3.5-397B-A17B"

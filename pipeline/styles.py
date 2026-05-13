@@ -1,10 +1,19 @@
-"""Style profiles for controlling translation tone and voice delivery."""
+"""Style profiles for controlling translation tone and voice delivery.
+
+Profiles live in ``prompts/styles.yaml`` — edit that file to add or tweak
+styles. Loaded lazily on first access and cached for the process lifetime.
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
+from pathlib import Path
+from typing import Any
 
-from . import config as _conf
+import yaml
+
+_STYLES_PATH = Path(__file__).resolve().parent.parent / "prompts" / "styles.yaml"
 
 
 @dataclass(frozen=True)
@@ -17,9 +26,18 @@ class StyleProfile:
     tts_emotion: str | None
 
 
+@lru_cache(maxsize=1)
+def _load() -> dict[str, dict[str, Any]]:
+    with open(_STYLES_PATH, encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    if not isinstance(data, dict):
+        raise ValueError(f"{_STYLES_PATH} must contain a top-level mapping of style names")
+    return data
+
+
 def resolve(name: str) -> StyleProfile:
-    """Look up a style profile by name from the loaded config."""
-    styles = _conf.get().get("styles", {})
+    """Look up a style profile by name."""
+    styles = _load()
     if name not in styles:
         available = ", ".join(sorted(styles)) or "(none defined)"
         raise ValueError(f"Unknown style {name!r}. Available: {available}")
@@ -39,5 +57,4 @@ def resolve(name: str) -> StyleProfile:
 
 def list_styles() -> list[StyleProfile]:
     """Return all available style profiles sorted by name."""
-    styles = _conf.get().get("styles", {})
-    return [resolve(name) for name in sorted(styles)]
+    return [resolve(name) for name in sorted(_load())]
