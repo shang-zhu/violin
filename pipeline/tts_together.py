@@ -1,4 +1,9 @@
-"""Cartesia Sonic 3 TTS backend (via Together AI serverless)."""
+"""Together AI TTS backend.
+
+Currently supports `cartesia/sonic-3` only. Together's serverless catalog also
+includes Kokoro and Orpheus (and other Cartesia versions); adding them needs a
+model-specific voice catalog — see ``_NATIVE_VOICES`` below for the shape.
+"""
 
 import re
 import subprocess
@@ -90,7 +95,7 @@ def synthesize_segment(
     emotion: str | None = None,
 ) -> str:
     response = client.audio.speech.create(
-        model=_conf.get()["models"]["tts"]["model"] if isinstance(_conf.get()["models"]["tts"], dict) else _conf.get()["models"]["tts"],
+        model=_conf.get()["models"]["tts"]["model"],
         input=_apply_ssml(text, speed, emotion),
         voice=voice,
         response_format="wav",

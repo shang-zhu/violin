@@ -12,8 +12,7 @@ wheels/
 examples/
 
 #logs
-out_*.log
-translate_debug/
+*.log
 jobs/
 
 .DS_Store

@@ -44,14 +44,18 @@ def record_usage(ip: str) -> None:
 
 
 def has_free_trial(ip: str) -> bool:
-    """Return True if this IP still has free trial jobs remaining."""
+    """Return True if this IP still has free trial jobs remaining.
+
+    ``FREE_TRIAL_JOBS <= 0`` means BYOK-only: no free trial is offered, every
+    request must carry its own API key.
+    """
     if FREE_TRIAL_JOBS <= 0:
-        return True
+        return False
     return get_usage(ip) < FREE_TRIAL_JOBS
 
 
 def remaining_trials(ip: str) -> int:
-    """Return how many free trial jobs remain for this IP."""
+    """Return how many free trial jobs remain for this IP (0 in BYOK-only mode)."""
     if FREE_TRIAL_JOBS <= 0:
-        return -1  # unlimited
+        return 0
     return max(0, FREE_TRIAL_JOBS - get_usage(ip))

@@ -1,0 +1,118 @@
+# Translation style profiles.
+# Each profile controls two things:
+#   - translation.directives  → injected into the LLM prompt
+#   - translation.temperature → optional override (null = use config/default.yaml's translation.temperature)
+#   - tts.speed              → TTS speed multiplier (null = TTS provider default)
+#   - tts.emotion            → Cartesia Sonic 3 SSML emotion tag (null = neutral)
+# Add your own by appending a new top-level entry.
+
+standard:
+  description: "Faithful translation, natural voice"
+  translation:
+    directives: ""
+    temperature: null
+  tts:
+    speed: null
+    emotion: null
+
+kids:
+  description: "Kid-friendly: rewritten for a 7-year-old"
+  translation:
+    temperature: 0.6
+    directives: |
+      You are NOT doing a literal translation. You are REWRITING the content
+      so a 7-year-old child can understand it. This is your top priority —
+      it overrides any other instruction about faithfulness.
+
+      MANDATORY RULES:
+      - Replace ALL technical jargon with plain, child-friendly explanations
+        in the target language. For example, instead of translating
+        "machine learning" literally, say the equivalent of "teaching computers
+        to learn by themselves". Instead of "algorithm", say "a set of
+        step-by-step instructions". Instead of "neural network", say
+        "a computer brain that copies how our brains work".
+      - Use short sentences (max 15 words each). Break long sentences apart.
+      - Use everyday words a child already knows. No academic vocabulary.
+      - Add brief fun analogies when it helps (e.g. "it's kind of like...").
+      - Drop filler phrases, hedging, and verbose academic courtesy.
+      - Keep proper names (people, places, courses) but simplify everything else.
+  tts:
+    speed: null
+    emotion: "excited"
+
+academic:
+  description: "Scholarly: formal register, precise terminology"
+  translation:
+    temperature: 0.2
+    directives: |
+      Translate in a scholarly, academic register:
+      - Preserve ALL technical terminology exactly — never simplify jargon.
+      - Use the most formal written register the target language offers.
+        Prefer literary/elevated connectors over colloquial ones.
+      - Use classical or high-register phrasing where natural in the target language.
+      - Use full titles and honorifics (e.g. "Professor", "Dr.") — never drop them.
+      - Maintain complex sentence structures; do not break them into shorter ones.
+      - Keep citations, references, and technical acronyms untranslated.
+  tts:
+    speed: 0.95
+    emotion: "calm"
+
+casual:
+  description: "Casual: spoken slang, like chatting with a friend"
+  translation:
+    temperature: 0.6
+    directives: |
+      Translate as if you're a friend casually explaining this to someone
+      over coffee. This is NOT a formal translation — be loose and natural.
+
+      MANDATORY RULES:
+      - Use spoken, colloquial language — contractions, slang, filler words
+        that are natural in the target language.
+      - Prefer informal connectors and discourse markers over formal ones.
+      - Shorten and simplify where possible. Drop formality entirely.
+      - Use the most casual form of "you" the target language offers.
+      - Add conversational flavor — idioms, interjections, and hedges
+        that native speakers actually use in everyday speech.
+      - It's OK to rephrase for naturalness — don't be a robot.
+  tts:
+    speed: 1.1
+    emotion: "content"
+
+storyteller:
+  description: "Dramatic: vivid narration with flair"
+  translation:
+    temperature: 0.7
+    directives: |
+      Translate as a dramatic storyteller narrating an exciting tale.
+      You have creative license to rephrase for maximum impact.
+
+      MANDATORY RULES:
+      - Use vivid, evocative language — paint pictures with words.
+      - Add dramatic flair: rhetorical questions, suspense, exclamations.
+      - Build tension and excitement ("Imagine this...", "What happened next
+        was remarkable...") — adapt these patterns naturally to the target language.
+      - Use literary devices: metaphor, contrast, rhythm.
+      - Vary sentence length for pacing — short punchy lines for impact,
+        flowing sentences for description.
+      - Keep the core meaning but make it captivating to listen to.
+  tts:
+    speed: 0.9
+    emotion: "enthusiastic"
+
+news:
+  description: "News anchor: concise, authoritative, no fluff"
+  translation:
+    temperature: 0.2
+    directives: |
+      Translate in the style of a professional news broadcast.
+
+      MANDATORY RULES:
+      - Be concise — cut filler words, hedging, and redundancy aggressively.
+      - Use clear, declarative sentences. No questions or exclamations.
+      - Prefer active voice. State facts directly.
+      - Use formal but accessible language — not academic, not casual.
+      - Compress wordy explanations into tight, newsworthy phrasing.
+      - Keep proper nouns and numbers exact.
+  tts:
+    speed: 1.0
+    emotion: "neutral"

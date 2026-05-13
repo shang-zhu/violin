@@ -11,24 +11,11 @@ from .transcriber import Segment
 
 
 def _tts_entry() -> dict[str, Any]:
-    """Return the models.tts config entry as a dict.
-
-    Supports both the new dict format and the legacy plain-string format:
-        # new
-        tts:
-          provider: cartesia
-          model: cartesia/sonic-3
-        # legacy
-        tts: "cartesia/sonic-3"
-    """
-    entry = _conf.get()["models"]["tts"]
-    if isinstance(entry, dict):
-        return entry
-    return {"provider": "cartesia", "model": entry}
+    return _conf.get()["models"]["tts"]
 
 
 def get_tts_provider() -> str:
-    return _tts_entry().get("provider", "cartesia")
+    return _tts_entry().get("provider", "together")
 
 
 def get_tts_model() -> str:
@@ -43,7 +30,7 @@ def _backend(provider: str | None = None):
     elif p == "openai":
         from . import tts_openai as _imp
     else:
-        from . import tts_cartesia as _imp
+        from . import tts_together as _imp
     return _imp
 
 

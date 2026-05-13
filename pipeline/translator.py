@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import json
-import os
 import time
-from datetime import datetime, timezone
 from typing import Any
 
 from together import (
@@ -68,29 +66,6 @@ SINGLE_SCHEMA = {
     "required": ["translation"],
     "additionalProperties": False,
 }
-
-
-def _dump_debug(tag: str, attempt: int, prompt: str, raw: str, error: str, texts: list[str]) -> str:
-    """Write a debug log file and return its path."""
-    os.makedirs(_tcfg()["debug_dir"], exist_ok=True)
-    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    path = os.path.join(_tcfg()["debug_dir"], f"{ts}_attempt{attempt}_{tag}.json")
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(
-            {
-                "timestamp": ts,
-                "attempt": attempt,
-                "error": error,
-                "expected_count": len(texts),
-                "input_texts": texts,
-                "prompt": prompt,
-                "raw_response": raw,
-            },
-            f,
-            ensure_ascii=False,
-            indent=2,
-        )
-    return path
 
 
 def _together_extra() -> dict[str, Any]:
@@ -232,14 +207,11 @@ def _try_batch(
             if len(translated) == len(texts):
                 return translated
 
-            err_msg = f"count mismatch: expected {len(texts)}, got {len(translated)}"
-            _dump_debug("count_mismatch", attempt, prompt, raw, err_msg, texts)
             if attempt < max_retries:
-                print(f"      ⚠ Count mismatch (attempt {attempt}), retrying...")
+                print(f"      ⚠ Count mismatch (attempt {attempt}): expected {len(texts)}, got {len(translated)}, retrying...")
                 time.sleep(2 ** attempt)
 
         except (json.JSONDecodeError, KeyError, TypeError) as exc:
-            _dump_debug("parse_error", attempt, prompt, raw, f"{type(exc).__name__}: {exc}", texts)
             if attempt < max_retries:
                 print(f"      ⚠ Parse error (attempt {attempt}): {exc}, retrying...")
                 time.sleep(2 ** attempt)

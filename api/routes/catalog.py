@@ -8,16 +8,16 @@ import re
 
 from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException
-from together import Together
 
 from api.models import VoiceCandidate, VoiceMatchRequest, VoiceMatchResponse
 from pipeline import config as _conf
 from pipeline.languages import all_languages, language_code
+from pipeline.llm_client import get_translation_model, make_translation_client
 from pipeline.styles import list_styles
 from pipeline.tts import all_voices, native_voices_for, voice_descriptions
 import prompts as _prompts
 
-load_dotenv()
+load_dotenv(override=True)
 
 router = APIRouter(tags=["catalog"])
 
@@ -125,19 +125,26 @@ def _parse_voice_candidates(raw: str, all_ids: list[str]) -> list[VoiceCandidate
 
 @router.post("/voice-match", response_model=VoiceMatchResponse)
 def match_voice(payload: VoiceMatchRequest):
-    """Use an LLM to map a natural language voice description to the best Cartesia voice."""
-    api_key = payload.together_api_key.strip() or os.environ.get("TOGETHER_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=500, detail="TOGETHER_API_KEY is not configured.")
+    """Use an LLM to map a natural language voice description to the best voice in the catalog.
+
+    Reuses the translation client + model (``models.translation``) — no separate
+    configuration needed.
+    """
+    cfg = _conf.get()
+    try:
+        client = make_translation_client(
+            cfg,
+            together_key_override=payload.together_api_key.strip() or None,
+            openai_key_override=payload.openai_api_key.strip() or None,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
     catalog = _build_voice_catalog(payload.language)
     all_ids: list[str] = []
     for v_list in all_voices().values():
         all_ids.extend(v_list)
     all_ids = list(dict.fromkeys(all_ids))
-
-    client = Together(api_key=api_key)
-    cfg = _conf.get()
 
     messages = [
         {
@@ -154,7 +161,8 @@ def match_voice(payload: VoiceMatchRequest):
         },
     ]
 
-    model = cfg["models"]["video_chat"]
+    # voice_match reuses the translation client + model — same LLM, same provider.
+    model = get_translation_model(cfg)
 
     last_error = ""
     for attempt in range(_MAX_VOICE_MATCH_RETRIES):
@@ -164,7 +172,6 @@ def match_voice(payload: VoiceMatchRequest):
                 messages=messages,
                 temperature=0.1,
                 max_tokens=400,
-                extra_body={"reasoning": {"enabled": False}},
             )
             msg = response.choices[0].message
             raw = (msg.content or "").strip()
