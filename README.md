@@ -1,10 +1,10 @@
-<p align="center">
-  <img src="assets/logo.png" alt="Violin logo" width="200">
-</p>
-
 # 🎻 Violin
 
 **Open-source Video Translation Tool.**
+
+<p align="left">
+  <img src="assets/logo.png" alt="Violin logo" width="256">
+</p>
 
 [🌐 Live demo](https://violin-ai.com) · [📜 MIT License](https://github.com/shang-zhu/violin/blob/main/LICENSE)
 
