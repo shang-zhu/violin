@@ -1,6 +1,10 @@
+<p align="center">
+  <img src="assets/logo.png" alt="Violin logo" width="200">
+</p>
+
 # 🎻 Violin
 
-**Open-source video dubbing — translate any video into 33 languages with natural-sounding voice-over and synced subtitles.**
+**Open-source Video Translation Tool.**
 
 [🌐 Live demo](https://violin-ai.com) · [📜 MIT License](https://github.com/shang-zhu/violin/blob/main/LICENSE)
 
