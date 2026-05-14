@@ -114,6 +114,14 @@ def synthesize_segment(
     return output_path
 
 
+def _is_rate_limit(exc: BaseException) -> bool:
+    """Best-effort 429 detection across Together SDK versions."""
+    if getattr(exc, "status_code", None) == 429:
+        return True
+    msg = str(exc).lower()
+    return "429" in msg or "rate_limit" in msg or "rate limit" in msg
+
+
 def synthesize_segments(
     segments: list[Segment],
     voice: str,
@@ -137,14 +145,46 @@ def synthesize_segments(
             tracker.add_tts_usage(len(seg.text))
         return idx, path
 
+    workers = _conf.get()["tts"]["workers"]
     done_count = 0
-    with ThreadPoolExecutor(max_workers=_conf.get()["tts"]["workers"]) as pool:
-        futures = {pool.submit(_do, i, seg): i for i, seg in enumerate(segments)}
+
+    def _record(idx: int, path: str) -> None:
+        nonlocal done_count
+        paths[idx] = path
+        done_count += 1
+        if done_count % 10 == 0 or done_count == total:
+            print(f"      TTS progress: {done_count}/{total} segments done")
+
+    def _run_serial(items: list[tuple[int, Segment]]) -> None:
+        """Plain sequential loop. Together's entry tier is 1 QPS — TTS request
+        latency (~1-2 s) already naturally stays under the limit, no sleep needed."""
+        for i, seg in items:
+            idx, path = _do(i, seg)
+            _record(idx, path)
+
+    if workers <= 1:
+        _run_serial(list(enumerate(segments)))
+        return paths
+
+    # Parallel path: try the configured worker count, then fall back to serial
+    # for any segments that hit 429 (typical when a user provides a BYOK key
+    # rate-limited to ~1 RPS while the server is configured for 8 parallel).
+    rate_limited: list[tuple[int, Segment]] = []
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(_do, i, seg): (i, seg) for i, seg in enumerate(segments)}
         for future in as_completed(futures):
-            idx, path = future.result()
-            paths[idx] = path
-            done_count += 1
-            if done_count % 10 == 0 or done_count == total:
-                print(f"      TTS progress: {done_count}/{total} segments done")
+            i, seg = futures[future]
+            try:
+                idx, path = future.result()
+                _record(idx, path)
+            except Exception as e:
+                if _is_rate_limit(e):
+                    rate_limited.append((i, seg))
+                else:
+                    raise
+
+    if rate_limited:
+        print(f"      Rate-limited — falling back to serial for {len(rate_limited)} segments")
+        _run_serial(rate_limited)
 
     return paths

@@ -154,6 +154,7 @@ def dub_video(
             tracker=tracker,
             speed=style.tts_speed,
             emotion=style.tts_emotion,
+            together_api_key=opts.together_api_key,
             elevenlabs_api_key=opts.elevenlabs_api_key,
             openai_api_key=opts.openai_api_key,
         )

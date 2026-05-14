@@ -46,7 +46,7 @@ translation:
 
 # ── 3. TTS ──────────────────────────────────────────────────
 tts:
-  workers: 8
+  workers: 8                        # parallel TTS API calls. Segments that get 429-throttled automatically fall back to serial, so this is safe even on entry-tier keys (just slower for those).
   tail_silence_ms: 120              # (ms) silence after segments ending in a comma / mid-clause break (keeps speech flowing)
   sentence_tail_silence_ms: 250     # (ms) silence after a sentence-ending mark (period/!?/。！？) — longer to feel natural
 

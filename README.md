@@ -73,6 +73,16 @@ uv sync
 cp .env.example .env             # then fill in TOGETHER_API_KEY
 uv run main.py lecture.mp4 lecture_zh.mp4 --language Chinese
 ```
+
+To use the `violin` / `violin-api` commands globally while edits to your local source reflect immediately, install editable:
+
+```bash
+uv tool uninstall violin     # if you've installed the PyPI version
+uv tool install --editable .
+```
+
+After this, `violin` / `violin-api` run from your local checkout — edit any file and the next invocation picks it up; no rebuild needed. To switch back to PyPI: `uv tool uninstall violin && uv tool install violin`.
+
 </details>
 
 ---
