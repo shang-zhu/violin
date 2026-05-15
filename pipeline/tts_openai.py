@@ -18,7 +18,7 @@ from openai import OpenAI
 
 from . import config as _conf
 from .costs import CostTracker
-from .ffmpeg_utils import FFMPEG_EXE
+from .ffmpeg_utils import FFMPEG_EXE, tts_text_has_speakable_content, write_silent_wav
 from .transcriber import Segment
 
 
@@ -86,6 +86,16 @@ def synthesize_segment(
     tts_entry = cfg["models"]["tts"]
     model_id = tts_entry["model"] if isinstance(tts_entry, dict) else "tts-1-hd"
 
+    tcfg = cfg.get("tts", {})
+    if re.search(r'[.!?。！？]\s*$', text):
+        tail_ms = tcfg.get("sentence_tail_silence_ms", tcfg.get("tail_silence_ms", 0))
+    else:
+        tail_ms = tcfg.get("tail_silence_ms", 0)
+
+    if not tts_text_has_speakable_content(text):
+        write_silent_wav(output_path, tail_ms)
+        return output_path
+
     kwargs = dict(model=model_id, voice=voice, input=text, response_format="mp3")
     # OpenAI accepts speed in [0.25, 4.0].
     if speed is not None and 0.25 <= speed <= 4.0:
@@ -95,11 +105,6 @@ def synthesize_segment(
     with client.audio.speech.with_streaming_response.create(**kwargs) as resp:
         resp.stream_to_file(mp3_path)
 
-    tcfg = cfg.get("tts", {})
-    if re.search(r'[.!?。！？]\s*$', text):
-        tail_ms = tcfg.get("sentence_tail_silence_ms", tcfg.get("tail_silence_ms", 0))
-    else:
-        tail_ms = tcfg.get("tail_silence_ms", 0)
     _to_wav(mp3_path, output_path, tail_ms)
     Path(mp3_path).unlink(missing_ok=True)
     return output_path

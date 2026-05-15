@@ -1,4 +1,8 @@
-"""Factory for translation + transcription clients — supports Together AI and OpenAI."""
+"""Factory for translation + transcription clients — Together AI and OpenAI.
+
+OpenAI stages may use ``base_url`` (YAML per ``models.<stage>`` or ``OPENAI_BASE_URL``)
+for private OpenAI-compatible servers.
+"""
 
 from __future__ import annotations
 
@@ -8,6 +12,46 @@ from typing import Any
 from dotenv import load_dotenv
 
 load_dotenv(override=True)
+
+
+def _resolve_openai_base_url(cfg: dict[str, Any], section: str) -> str | None:
+    """Return OpenAI-compatible API base URL for *section* (``models.<section>``).
+
+    Order: non-empty ``base_url`` on that model's dict entry, else ``OPENAI_BASE_URL`` env.
+    *section* is one of: ``transcription``, ``translation``, ``chat``, ``tts``.
+    """
+    entry = cfg.get("models", {}).get(section)
+    if isinstance(entry, dict):
+        url = entry.get("base_url")
+        if isinstance(url, str) and url.strip():
+            return url.strip()
+    env_url = os.environ.get("OPENAI_BASE_URL")
+    return env_url.strip() if env_url and env_url.strip() else None
+
+
+def make_openai_client_for_section(
+    cfg: dict[str, Any],
+    section: str,
+    *,
+    openai_key_override: str | None = None,
+):
+    """Build ``OpenAI`` SDK client with optional ``base_url`` (private / compatible gateways).
+
+    ``OPENAI_API_KEY`` may be empty (e.g. gateways that do not check the key); use
+    ``openai_key_override`` to pass a key explicitly, including ``""``.
+    """
+    from openai import OpenAI
+
+    if openai_key_override is not None:
+        api_key = openai_key_override.strip()
+    else:
+        api_key = (os.environ.get("OPENAI_API_KEY") or "").strip()
+
+    kwargs: dict[str, Any] = {"api_key": api_key}
+    base_url = _resolve_openai_base_url(cfg, section)
+    if base_url:
+        kwargs["base_url"] = base_url
+    return OpenAI(**kwargs)
 
 
 def _parse_translation_config(cfg: dict[str, Any]) -> tuple[str, str]:
@@ -54,11 +98,9 @@ def make_translation_client(
     provider, _ = _parse_translation_config(cfg)
 
     if provider == "openai":
-        from openai import OpenAI
-        api_key = openai_key_override or os.environ.get("OPENAI_API_KEY")
-        if not api_key:
-            raise RuntimeError("OPENAI_API_KEY environment variable is not set.")
-        return OpenAI(api_key=api_key)
+        return make_openai_client_for_section(
+            cfg, "translation", openai_key_override=openai_key_override
+        )
 
     from together import Together
     api_key = together_key_override or os.environ.get("TOGETHER_API_KEY")
@@ -110,11 +152,9 @@ def make_chat_client(
     provider, _ = _parse_chat_config(cfg)
 
     if provider == "openai":
-        from openai import OpenAI
-        api_key = openai_key_override or os.environ.get("OPENAI_API_KEY")
-        if not api_key:
-            raise RuntimeError("OPENAI_API_KEY environment variable is not set.")
-        return OpenAI(api_key=api_key)
+        return make_openai_client_for_section(
+            cfg, "chat", openai_key_override=openai_key_override
+        )
 
     from together import Together
     api_key = together_key_override or os.environ.get("TOGETHER_API_KEY")
@@ -154,7 +194,11 @@ def required_env_keys(cfg: dict[str, Any]) -> set[str]:
 
 def validate_env(cfg: dict[str, Any]) -> list[str]:
     """Return env var names that are required but unset (sorted, deduped)."""
-    return sorted(k for k in required_env_keys(cfg) if not os.environ.get(k))
+    return sorted(
+        k
+        for k in required_env_keys(cfg)
+        if k != "OPENAI_API_KEY" and not os.environ.get(k)
+    )
 
 
 def _parse_transcription_config(cfg: dict[str, Any]) -> tuple[str, str]:
@@ -199,11 +243,9 @@ def make_transcription_client(
     provider, _ = _parse_transcription_config(cfg)
 
     if provider == "openai":
-        from openai import OpenAI
-        api_key = openai_key_override or os.environ.get("OPENAI_API_KEY")
-        if not api_key:
-            raise RuntimeError("OPENAI_API_KEY environment variable is not set.")
-        return OpenAI(api_key=api_key)
+        return make_openai_client_for_section(
+            cfg, "transcription", openai_key_override=openai_key_override
+        )
 
     from together import Together
     api_key = together_key_override or os.environ.get("TOGETHER_API_KEY")

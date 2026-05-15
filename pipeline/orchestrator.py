@@ -200,7 +200,14 @@ def _emit(cb: ProgressCallback | None, step: int, msg: str) -> None:
 
 
 def _resolve_voice(voice: str | None, lang_code: str, cfg: dict) -> str:
+    # Back-compat / UX: allow callers to pass "male"/"female" as a shorthand.
+    # The TTS backends expect a concrete voice name or ID, not a gender label.
     if voice:
+        v = voice.strip().lower()
+        if v in {"male", "m"}:
+            return native_voices_for(lang_code)[0]
+        if v in {"female", "f"}:
+            return native_voices_for(lang_code)[1]
         return voice
     gender_idx = 0 if cfg["preferences"].get("voice_gender", "male") == "male" else 1
     return native_voices_for(lang_code)[gender_idx]

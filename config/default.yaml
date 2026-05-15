@@ -1,5 +1,10 @@
 # Violin configuration
 # Override with a custom YAML via: --config my_config.yaml
+#
+# When models.<stage>.provider is "openai", optional base_url on that stage
+# points at an OpenAI-compatible HTTP API (self-hosted gateway, vLLM, etc.).
+# <stage> may be transcription, translation, chat, or tts.
+# Per-stage YAML base_url overrides the OPENAI_BASE_URL environment variable.
 
 # ── Models ──────────────────────────────────────────────────
 models:
@@ -46,7 +51,9 @@ translation:
 
 # ── 3. TTS ──────────────────────────────────────────────────
 tts:
-  workers: 8                        # parallel TTS API calls. Segments that get 429-throttled automatically fall back to serial, so this is safe even on entry-tier keys (just slower for those).
+  workers: 8                        # parallel TTS API calls (Together/OpenAI). ElevenLabs caps at elevenlabs_workers.
+  elevenlabs_workers: 2             # max parallel ElevenLabs calls (409 if too high on same voice)
+  elevenlabs_retries: 5             # per-segment retries with backoff on 409/429
   tail_silence_ms: 120              # (ms) silence after segments ending in a comma / mid-clause break (keeps speech flowing)
   sentence_tail_silence_ms: 250     # (ms) silence after a sentence-ending mark (period/!?/。！？) — longer to feel natural
 
