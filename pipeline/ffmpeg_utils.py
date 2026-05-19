@@ -22,6 +22,25 @@ def _find_ffmpeg() -> str:
 FFMPEG_EXE = _find_ffmpeg()
 
 
+def write_silent_wav(wav_path: str, duration_ms: int) -> None:
+    """Write a mono 44100 Hz PCM WAV of silence (minimum 10 ms)."""
+    dur_s = max(duration_ms, 10) / 1000.0
+    subprocess.run(
+        [FFMPEG_EXE, "-y", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=mono",
+         "-t", f"{dur_s:.3f}", "-c:a", "pcm_s16le", wav_path],
+        check=True, capture_output=True,
+    )
+
+
+def tts_text_has_speakable_content(text: str) -> bool:
+    """True if *text* has at least one letter or digit (any script).
+
+    Punctuation-only fragments (e.g. ``','``) are not sent to TTS APIs —
+    many return empty audio.
+    """
+    return any(ch.isalnum() for ch in text.strip())
+
+
 def get_duration_video(path: str) -> float:
     """Get duration of any audio/video file.
 

@@ -14,7 +14,7 @@ from together import Together
 
 from . import config as _conf
 from .costs import CostTracker
-from .ffmpeg_utils import FFMPEG_EXE
+from .ffmpeg_utils import FFMPEG_EXE, tts_text_has_speakable_content, write_silent_wav
 from .transcriber import Segment
 
 # Native-sounding voices per language — matched to Cartesia's language-specific voice catalog.
@@ -94,6 +94,16 @@ def synthesize_segment(
     speed: float | None = None,
     emotion: str | None = None,
 ) -> str:
+    tcfg = _conf.get().get("tts", {})
+    if re.search(r'[.!?。！？]\s*$', text):
+        tail_ms = tcfg.get("sentence_tail_silence_ms", tcfg.get("tail_silence_ms", 0))
+    else:
+        tail_ms = tcfg.get("tail_silence_ms", 0)
+
+    if not tts_text_has_speakable_content(text):
+        write_silent_wav(output_path, tail_ms)
+        return output_path
+
     response = client.audio.speech.create(
         model=_conf.get()["models"]["tts"]["model"],
         input=_apply_ssml(text, speed, emotion),
@@ -102,14 +112,9 @@ def synthesize_segment(
         language=language,
     )
     response.write_to_file(output_path)
-    tcfg = _conf.get().get("tts", {})
     # Longer pause after a sentence-ending mark (period / !? / 。！？) so the
     # next segment doesn't feel hard-cut against the previous one. Mid-clause
     # boundaries (commas etc.) keep the short tail to preserve flow.
-    if re.search(r'[.!?。！？]\s*$', text):
-        tail_ms = tcfg.get("sentence_tail_silence_ms", tcfg.get("tail_silence_ms", 0))
-    else:
-        tail_ms = tcfg.get("tail_silence_ms", 0)
     _append_silence(output_path, tail_ms)
     return output_path
 

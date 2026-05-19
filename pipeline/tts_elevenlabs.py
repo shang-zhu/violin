@@ -20,6 +20,7 @@ as the Cartesia backend.
 
 import re
 import subprocess
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -27,7 +28,7 @@ from elevenlabs.client import ElevenLabs
 
 from . import config as _conf
 from .costs import CostTracker
-from .ffmpeg_utils import FFMPEG_EXE
+from .ffmpeg_utils import FFMPEG_EXE, tts_text_has_speakable_content, write_silent_wav
 from .transcriber import Segment
 
 
@@ -188,18 +189,46 @@ def _resolve_voice_id(voice: str) -> str:
     return voice
 
 
+def _is_retryable_elevenlabs(exc: BaseException) -> bool:
+    """409 already_running and 429 rate limits — retry or fall back to serial."""
+    code = getattr(exc, "status_code", None)
+    if code in (409, 429):
+        return True
+    msg = str(exc).lower()
+    return (
+        "429" in msg
+        or "409" in msg
+        or "rate_limit" in msg
+        or "rate limit" in msg
+        or "already_running" in msg
+    )
+
+
 def _to_wav(mp3_path: str, wav_path: str, tail_ms: int) -> None:
     """Convert MP3 to mono 44100 PCM WAV, optionally appending silence."""
+    mp3 = Path(mp3_path)
+    if not mp3.is_file() or mp3.stat().st_size < 128:
+        raise RuntimeError(
+            f"ElevenLabs returned empty or invalid audio for {mp3_path} "
+            f"({mp3.stat().st_size if mp3.is_file() else 0} bytes)"
+        )
     af = []
     if tail_ms > 0:
         af = ["-af", f"apad=pad_dur={tail_ms / 1000:.3f}"]
-    subprocess.run(
-        [FFMPEG_EXE, "-y", "-i", mp3_path,
-         *af,
-         "-c:a", "pcm_s16le", "-ar", "44100", "-ac", "1",
-         wav_path],
-        check=True, capture_output=True,
-    )
+    try:
+        subprocess.run(
+            [FFMPEG_EXE, "-y", "-i", mp3_path,
+             *af,
+             "-c:a", "pcm_s16le", "-ar", "44100", "-ac", "1",
+             wav_path],
+            check=True, capture_output=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        stderr = (exc.stderr or b"").decode(errors="replace").strip()
+        raise RuntimeError(
+            f"ffmpeg failed converting {mp3_path} to WAV"
+            + (f": {stderr}" if stderr else "")
+        ) from exc
 
 
 def synthesize_segment(
@@ -216,6 +245,16 @@ def synthesize_segment(
     tts_entry = cfg["models"]["tts"]
     model_id = tts_entry["model"] if isinstance(tts_entry, dict) else "eleven_v3"
 
+    tcfg = cfg.get("tts", {})
+    if re.search(r'[.!?。！？]\s*$', text):
+        tail_ms = tcfg.get("sentence_tail_silence_ms", tcfg.get("tail_silence_ms", 0))
+    else:
+        tail_ms = tcfg.get("tail_silence_ms", 0)
+
+    if not tts_text_has_speakable_content(text):
+        write_silent_wav(output_path, tail_ms)
+        return output_path
+
     voice_settings = {}
     if speed is not None and 0.7 <= speed <= 1.2:
         voice_settings["speed"] = speed
@@ -229,19 +268,27 @@ def synthesize_segment(
     if voice_settings:
         kwargs["voice_settings"] = voice_settings
 
-    audio = client.text_to_speech.convert(**kwargs)
-
     mp3_path = output_path + ".tmp.mp3"
-    with open(mp3_path, "wb") as f:
-        for chunk in audio:
-            if chunk:
-                f.write(chunk)
-
-    tcfg = cfg.get("tts", {})
-    if re.search(r'[.!?。！？]\s*$', text):
-        tail_ms = tcfg.get("sentence_tail_silence_ms", tcfg.get("tail_silence_ms", 0))
+    max_retries = int(_conf.get().get("tts", {}).get("elevenlabs_retries", 5))
+    last_exc: BaseException | None = None
+    for attempt in range(max_retries):
+        try:
+            audio = client.text_to_speech.convert(**kwargs)
+            with open(mp3_path, "wb") as f:
+                for chunk in audio:
+                    if chunk:
+                        f.write(chunk)
+            break
+        except Exception as exc:
+            last_exc = exc
+            if _is_retryable_elevenlabs(exc) and attempt < max_retries - 1:
+                time.sleep(0.5 * (2 ** attempt))
+                continue
+            raise
     else:
-        tail_ms = tcfg.get("tail_silence_ms", 0)
+        assert last_exc is not None
+        raise last_exc
+
     _to_wav(mp3_path, output_path, tail_ms)
     Path(mp3_path).unlink(missing_ok=True)
     return output_path
@@ -270,14 +317,54 @@ def synthesize_segments(
             tracker.add_tts_usage(len(seg.text))
         return idx, path
 
+    tcfg = _conf.get().get("tts", {})
+    # eleven_v3 can 409 when many parallel requests hit the same voice_id.
+    workers = min(tcfg.get("workers", 8), tcfg.get("elevenlabs_workers", 2))
     done_count = 0
-    with ThreadPoolExecutor(max_workers=_conf.get()["tts"]["workers"]) as pool:
-        futures = {pool.submit(_do, i, seg): i for i, seg in enumerate(segments)}
+
+    def _record(idx: int, path: str) -> None:
+        nonlocal done_count
+        paths[idx] = path
+        done_count += 1
+        if done_count % 10 == 0 or done_count == total:
+            print(f"      TTS progress: {done_count}/{total} segments done")
+
+    def _run_serial(items: list[tuple[int, Segment]]) -> None:
+        for i, seg in items:
+            try:
+                idx, path = _do(i, seg)
+            except Exception as exc:
+                preview = seg.text[:80].replace("\n", " ")
+                raise RuntimeError(
+                    f"TTS failed for segment {seg.id} ({i + 1}/{total}): {preview!r}"
+                ) from exc
+            _record(idx, path)
+
+    if workers <= 1:
+        _run_serial(list(enumerate(segments)))
+        return paths
+
+    retry_later: list[tuple[int, Segment]] = []
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(_do, i, seg): (i, seg) for i, seg in enumerate(segments)}
         for future in as_completed(futures):
-            idx, path = future.result()
-            paths[idx] = path
-            done_count += 1
-            if done_count % 10 == 0 or done_count == total:
-                print(f"      TTS progress: {done_count}/{total} segments done")
+            i, seg = futures[future]
+            try:
+                idx, path = future.result()
+                _record(idx, path)
+            except Exception as exc:
+                if _is_retryable_elevenlabs(exc):
+                    retry_later.append((i, seg))
+                else:
+                    preview = seg.text[:80].replace("\n", " ")
+                    raise RuntimeError(
+                        f"TTS failed for segment {seg.id} ({i + 1}/{total}): {preview!r}"
+                    ) from exc
+
+    if retry_later:
+        print(
+            f"      ElevenLabs busy — retrying {len(retry_later)} segment(s) serially…"
+        )
+        _run_serial(retry_later)
 
     return paths

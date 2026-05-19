@@ -6,6 +6,7 @@ import os
 from typing import Any
 
 from . import config as _conf
+from . import llm_client as _llm_client
 from .costs import CostTracker
 from .transcriber import Segment
 
@@ -68,14 +69,11 @@ def _make_client(
         return ElevenLabs(api_key=api_key)
 
     if provider == "openai":
-        from openai import OpenAI
-        api_key = openai_api_key or os.environ.get("OPENAI_API_KEY")
-        if not api_key:
-            raise RuntimeError(
-                "OPENAI_API_KEY is not set. Provide one via env var or "
-                "pass openai_api_key= when calling synthesize_segments."
-            )
-        return OpenAI(api_key=api_key)
+        return _llm_client.make_openai_client_for_section(
+            _conf.get(),
+            "tts",
+            openai_key_override=openai_api_key,
+        )
 
     # cartesia (default) — Together-hosted; honor user-provided key, fall back to env.
     from together import Together

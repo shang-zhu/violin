@@ -1,18 +1,25 @@
 # Example override — premium stack: OpenAI for transcription/translation,
 # ElevenLabs for TTS. Useful as a reference when wiring up alternate providers.
-# Requires OPENAI_API_KEY and ELEVENLABS_API_KEY in .env.
+# Requires ELEVENLABS_API_KEY; OPENAI_API_KEY may be omitted or empty when using
+# a private gateway (set OPENAI_BASE_URL / per-stage base_url).
 # Load with:  uv run run_api.py --config config/other_api.yaml
+#
+# For a private OpenAI-compatible gateway, set OPENAI_BASE_URL in .env and/or
+# add base_url under each models.* block that uses provider: openai.
 
 models:
   transcription:
     provider: openai
-    model: whisper-1
+    model: whisper-large-v3
+    # base_url: https://your-gateway.example/v1
   translation:
     provider: openai
-    model: gpt-5.5
+    model: gpt-4o
+    # base_url: https://your-gateway.example/v1
   tts:
     provider: elevenlabs
     model: eleven_v3
   chat:
     provider: openai
-    model: gpt-5.5            # must be vision-capable to read the sampled frames
+    model: gpt-4o            # must be vision-capable to read the sampled frames
+    # base_url: https://your-gateway.example/v1

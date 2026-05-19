@@ -108,7 +108,8 @@ class CostTracker:
         print()
         print(f"  {'Transcription':<22} {w['audio_minutes']:>7.1f} min"
               f"          ${w['cost']:>8.4f}")
-        print(f"  {f'Translation ({t['provider']})':<22} {t['input_tokens']:>7,} in"
+        trans_label = f"Translation ({t['provider']})"
+        print(f"  {trans_label:<22} {t['input_tokens']:>7,} in"
               f" / {t['output_tokens']:>7,} out"
               f"  ${t['cost']:>8.4f}  ({t['calls']} calls)")
         print(f"  {'TTS':<22} {tts['characters']:>7,} chars"
